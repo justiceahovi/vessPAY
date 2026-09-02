@@ -15,8 +15,8 @@ Legend: `[ ]` not started/in progress · `[x]` done and verified · `⚠` blocke
 
 - [x] T0.1 — Repo scaffolding
   - Note: Initialized git repository, created folder skeleton (apps/mobile, apps/backend), and added root .gitignore covering Node, Flutter, and .env files.
-- [ ] T0.2 — Backend project init
-  - Note:
+- [x] T0.2 — Backend project init
+  - Note: Initialized Express + TypeScript backend in apps/backend with dev/build/start scripts, .env.example with Section 5 variables, and verified GET /api/health returns 200.
 - [ ] T0.3 — Flutter project init
   - Note:
 - [ ] T0.4 — Database provisioning
