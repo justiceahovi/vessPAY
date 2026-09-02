@@ -13,8 +13,8 @@ Legend: `[ ]` not started/in progress · `[x]` done and verified · `⚠` blocke
 
 ## Phase 0 — Environment & Repo Setup
 
-- [ ] T0.1 — Repo scaffolding
-  - Note:
+- [x] T0.1 — Repo scaffolding
+  - Note: Initialized git repository, created folder skeleton (apps/mobile, apps/backend), and added root .gitignore covering Node, Flutter, and .env files.
 - [ ] T0.2 — Backend project init
   - Note:
 - [ ] T0.3 — Flutter project init
