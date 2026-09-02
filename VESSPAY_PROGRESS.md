@@ -20,7 +20,7 @@ Legend: `[ ]` not started/in progress · `[x]` done and verified · `⚠` blocke
 - [x] T0.3 — Flutter project init
   - Note: Initialized Flutter project in apps/mobile with flutter_riverpod, dio, go_router, and flutter_secure_storage; verified dependencies, analyzer, tests, and build.
 - [ ] T0.4 — Database provisioning
-  - Note: (record which DB client/ORM was chosen here)
+  - Note: ORM chosen: **Prisma v5** (prisma-client-js, CommonJS-compatible). Prisma installed, schema.prisma configured, client generated, SELECT 1 check wired into startup. ⚠ BLOCKED: `DATABASE_URL` not yet set in `apps/backend/.env` — create a Supabase project and paste the connection string (Project Settings → Database → Connection string → URI mode) into `.env` to unblock. Run `npm run dev` after adding the URL to verify the SELECT 1 check passes.
 - [ ] T0.5 — WeWire sandbox connectivity check
   - Note: (record actual base URL / auth header confirmed working)
 
