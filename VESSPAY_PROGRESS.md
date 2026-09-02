@@ -21,8 +21,8 @@ Legend: `[ ]` not started/in progress · `[x]` done and verified · `⚠` blocke
   - Note: Initialized Flutter project in apps/mobile with flutter_riverpod, dio, go_router, and flutter_secure_storage; verified dependencies, analyzer, tests, and build.
 - [x] T0.4 — Database provisioning
   - Note: ORM chosen: **Prisma v5** (prisma-client-js, CommonJS-compatible). Provisioned local PostgreSQL 17 database `vesspay` with connection string in `.env`, wired startup SELECT 1 check in src/lib/db.ts, and verified successful DB query on server startup. Ready to swap to Supabase for production.
-- [ ] T0.5 — WeWire sandbox connectivity check
-  - Note: (record actual base URL / auth header confirmed working)
+- [x] T0.5 — WeWire sandbox connectivity check
+  - Note: Confirmed base URL `https://stage-capi.wewireafrica.com` and auth header `ww-api-key: sk_test_...` working with HTTP 200 OK on `GET /v1/subcustomers`. Added `npm run check:wewire` script.
 
 ## Phase 1 — Product Foundation
 

@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "check:wewire": "tsx scripts/check-wewire.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
