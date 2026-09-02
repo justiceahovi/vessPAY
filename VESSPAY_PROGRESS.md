@@ -17,8 +17,8 @@ Legend: `[ ]` not started/in progress · `[x]` done and verified · `⚠` blocke
   - Note: Initialized git repository, created folder skeleton (apps/mobile, apps/backend), and added root .gitignore covering Node, Flutter, and .env files.
 - [x] T0.2 — Backend project init
   - Note: Initialized Express + TypeScript backend in apps/backend with dev/build/start scripts, .env.example with Section 5 variables, and verified GET /api/health returns 200.
-- [ ] T0.3 — Flutter project init
-  - Note:
+- [x] T0.3 — Flutter project init
+  - Note: Initialized Flutter project in apps/mobile with flutter_riverpod, dio, go_router, and flutter_secure_storage; verified dependencies, analyzer, tests, and build.
 - [ ] T0.4 — Database provisioning
   - Note: (record which DB client/ORM was chosen here)
 - [ ] T0.5 — WeWire sandbox connectivity check
