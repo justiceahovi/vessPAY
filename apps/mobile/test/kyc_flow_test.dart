@@ -6,7 +6,9 @@ import 'package:vesspay/core/routing/app_routes.dart';
 import 'package:vesspay/features/kyc/models/kyc_model.dart';
 import 'package:vesspay/features/kyc/repositories/kyc_repository.dart';
 import 'package:vesspay/features/kyc/screens/kyc_screen.dart';
+import 'package:vesspay/features/wallet/repositories/wallet_repository.dart';
 import 'package:vesspay/features/wallet/screens/add_money_screen.dart';
+import 'support/fake_wallet_currency.dart';
 
 class MockKycRepository implements KycRepository {
   final KycStatusModel status;
@@ -82,6 +84,8 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            walletRepositoryProvider
+                .overrideWithValue(FakeCurrencyWalletRepository()),
             kycRepositoryProvider.overrideWithValue(mockRepo),
           ],
           child: const MaterialApp(
@@ -106,6 +110,8 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            walletRepositoryProvider
+                .overrideWithValue(FakeCurrencyWalletRepository()),
             kycRepositoryProvider.overrideWithValue(
               MockKycRepository(
                 status: KycStatusModel(
@@ -137,6 +143,8 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            walletRepositoryProvider
+                .overrideWithValue(FakeCurrencyWalletRepository()),
             kycRepositoryProvider.overrideWithValue(
               MockKycRepository(
                 status: KycStatusModel(
@@ -164,6 +172,8 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            walletRepositoryProvider
+                .overrideWithValue(FakeCurrencyWalletRepository()),
             kycRepositoryProvider.overrideWithValue(mockRepo),
           ],
           child: const MaterialApp(
@@ -191,6 +201,8 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            walletRepositoryProvider
+                .overrideWithValue(FakeCurrencyWalletRepository()),
             kycRepositoryProvider.overrideWithValue(mockRepo),
           ],
           child: MaterialApp.router(
@@ -222,6 +234,8 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            walletRepositoryProvider
+                .overrideWithValue(FakeCurrencyWalletRepository()),
             kycRepositoryProvider.overrideWithValue(
               MockKycRepository(
                 status: KycStatusModel(
@@ -258,6 +272,8 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            walletRepositoryProvider
+                .overrideWithValue(FakeCurrencyWalletRepository()),
             kycRepositoryProvider.overrideWithValue(
               MockKycRepository(
                 status: KycStatusModel(
@@ -281,6 +297,8 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            walletRepositoryProvider
+                .overrideWithValue(FakeCurrencyWalletRepository()),
             kycRepositoryProvider.overrideWithValue(
               MockKycRepository(
                 status: KycStatusModel(

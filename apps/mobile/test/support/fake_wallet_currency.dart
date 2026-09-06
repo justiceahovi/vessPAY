@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:vesspay/features/wallet/models/deposit_account_model.dart';
 import 'package:vesspay/core/providers.dart';
 import 'package:vesspay/core/storage/currency_preference_storage.dart';
 import 'package:vesspay/features/wallet/models/topup_model.dart';
@@ -11,7 +12,20 @@ import 'package:vesspay/features/wallet/repositories/wallet_repository.dart';
 class FakeCurrencyWalletRepository implements WalletRepository {
   String? savedCurrency;
 
-  FakeCurrencyWalletRepository({this.savedCurrency});
+  /// Deposit-account state the gate should see. Defaults to a ready account so
+  /// screens under test reach their real content.
+  DepositAccountModel depositAccount;
+  String? provisionedSourceOfFunds;
+  int provisionCalls = 0;
+
+  FakeCurrencyWalletRepository({
+    this.savedCurrency,
+    DepositAccountModel? depositAccount,
+  }) : depositAccount = depositAccount ??
+            const DepositAccountModel(
+              state: DepositAccountState.ready,
+              currency: 'USD',
+            );
 
   @override
   Future<List<WalletBalanceModel>> getBalances() async => [
@@ -45,6 +59,22 @@ class FakeCurrencyWalletRepository implements WalletRepository {
   @override
   Future<TopupResponseModel> confirmTopup(String fundingTransactionId) async =>
       throw UnimplementedError();
+
+  @override
+  Future<DepositAccountModel> getDepositAccount() async => depositAccount;
+
+  @override
+  Future<DepositAccountModel> provisionDepositAccount({
+    String? sourceOfFunds,
+  }) async {
+    provisionCalls++;
+    provisionedSourceOfFunds = sourceOfFunds;
+    depositAccount = const DepositAccountModel(
+      state: DepositAccountState.provisioning,
+      currency: 'USD',
+    );
+    return depositAccount;
+  }
 }
 
 /// Overrides that give a test a wallet already held in [currency], skipping the

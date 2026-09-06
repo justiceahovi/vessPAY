@@ -6,8 +6,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Runtime queries go through the pgbouncer transaction pooler (6543).
+  url       = env("DATABASE_URL")
+  // Migrations need a session connection (5432); pgbouncer cannot run them.
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -21,6 +24,7 @@ model User {
   wewireSubcustomerId String?         @map("wewire_subcustomer_id")
   /// Wallet currency the user chose on first sign-on; null until they pick one.
   primaryCurrency     String?         @map("primary_currency")
+  sourceOfFunds       String?         @map("source_of_funds")
   createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 

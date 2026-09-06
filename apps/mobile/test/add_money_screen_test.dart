@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:vesspay/features/wallet/models/deposit_account_model.dart';
 import 'package:vesspay/core/routing/app_router.dart';
 import 'package:vesspay/core/routing/app_routes.dart';
 import 'package:vesspay/features/wallet/models/topup_model.dart';
@@ -93,6 +94,22 @@ class MockWalletRepositoryForAddMoney implements WalletRepository {
       currency: 'USD',
     );
   }
+
+  @override
+  Future<DepositAccountModel> getDepositAccount() async =>
+      const DepositAccountModel(
+        state: DepositAccountState.ready,
+        currency: 'USD',
+      );
+
+  @override
+  Future<DepositAccountModel> provisionDepositAccount({
+    String? sourceOfFunds,
+  }) async =>
+      const DepositAccountModel(
+        state: DepositAccountState.ready,
+        currency: 'USD',
+      );
 }
 
 void main() {

@@ -1143,11 +1143,50 @@ export interface WeWireSubCustomerAccount {
 }
 
 /**
+ * The values WeWire accepts for `sourceOfFunds`, taken verbatim from the
+ * VALIDATION_FAILED response the sandbox returns when the field is omitted.
+ * It is a closed enum, so the app offers these as choices rather than free text.
+ */
+export const SOURCE_OF_FUNDS_VALUES = [
+  'company_funds',
+  'ecommerce_reseller',
+  'gambling_proceeds',
+  'gifts',
+  'government_benefits',
+  'inheritance',
+  'investments_loans',
+  'pension_retirement',
+  'salary',
+  'sale_of_assets_real_estate',
+  'savings',
+  'someone_elses_funds',
+  'business_loans',
+  'grants',
+  'inter_company_funds',
+  'investment_proceeds',
+  'legal_settlement',
+  'owners_capital',
+  'sale_of_assets',
+  'sales_of_goods_and_services',
+  'third_party_funds',
+  'treasury_reserves',
+] as const;
+
+export type SourceOfFunds = (typeof SOURCE_OF_FUNDS_VALUES)[number];
+
+export function isSourceOfFunds(raw: unknown): raw is SourceOfFunds {
+  return (
+    typeof raw === 'string' &&
+    (SOURCE_OF_FUNDS_VALUES as readonly string[]).includes(raw)
+  );
+}
+
+/**
  * Compliance answers WeWire requires when issuing a USD account. These are the
  * user's own declarations, so callers must supply them: never invent a value.
  */
 export interface AccountRequestDetails {
-  sourceOfFunds?: string;
+  sourceOfFunds?: SourceOfFunds;
   occupation?: string;
   employment_status?: string;
   account_purpose?: string;

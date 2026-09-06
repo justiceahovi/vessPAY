@@ -1,8 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/db';
 import { authenticate } from '../middleware/auth';
+import { getDepositAccountStatus } from '../lib/deposit-account';
 import {
   getHostedKycLink,
+  isSourceOfFunds,
   initiateWeWireFunding,
   resolveWeWireDepositAccount,
   simulateWeWireDeposit,
@@ -237,6 +239,93 @@ router.get('/balances', authenticate, async (req: Request, res: Response): Promi
       error: {
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to retrieve wallet balances',
+      },
+    });
+  }
+});
+
+/**
+ * Source-of-funds options offered to individual travellers.
+ *
+ * WeWire accepts 22 values, but over half are business-only (treasury reserves,
+ * owner's capital, inter-company funds). Offering those to an individual invites
+ * a wrong answer on a compliance field, so the list is filtered and labelled.
+ */
+const INDIVIDUAL_SOURCE_OF_FUNDS = [
+  { value: 'salary', label: 'Salary or wages' },
+  { value: 'savings', label: 'Personal savings' },
+  { value: 'investment_proceeds', label: 'Investment proceeds' },
+  { value: 'pension_retirement', label: 'Pension or retirement income' },
+  { value: 'sales_of_goods_and_services', label: 'Sale of goods or services' },
+  { value: 'sale_of_assets', label: 'Sale of assets' },
+  { value: 'sale_of_assets_real_estate', label: 'Sale of property' },
+  { value: 'inheritance', label: 'Inheritance' },
+  { value: 'gifts', label: 'Gift' },
+  { value: 'government_benefits', label: 'Government benefits' },
+  { value: 'grants', label: 'Grant or scholarship' },
+  { value: 'legal_settlement', label: 'Legal settlement' },
+];
+
+/**
+ * GET /api/wallet/deposit-account
+ * Reports where the user is in deposit-account setup. Read-only: safe to poll.
+ */
+router.get('/deposit-account', authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const status = await getDepositAccountStatus(req.user!.id);
+    res.status(200).json({
+      ...status,
+      sourceOfFundsOptions: INDIVIDUAL_SOURCE_OF_FUNDS,
+    });
+  } catch (err: any) {
+    console.error('Error reading deposit account status:', err);
+    res.status(500).json({
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: err?.message || 'Failed to read deposit account status',
+      },
+    });
+  }
+});
+
+/**
+ * POST /api/wallet/deposit-account
+ * Stores the user's own source-of-funds declaration when supplied, then asks
+ * WeWire to issue the virtual account. Issuance is asynchronous, so a PROVISIONING
+ * response is expected and the client should poll the GET above.
+ */
+router.post('/deposit-account', authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const raw = req.body?.sourceOfFunds;
+
+    if (raw !== undefined) {
+      if (!isSourceOfFunds(raw)) {
+        res.status(400).json({
+          error: {
+            code: 'INVALID_SOURCE_OF_FUNDS',
+            message: 'sourceOfFunds must be one of the supported values',
+          },
+        });
+        return;
+      }
+      await prisma.user.update({
+        where: { id: userId },
+        data: { sourceOfFunds: raw },
+      });
+    }
+
+    const status = await getDepositAccountStatus(userId, { provision: true });
+    res.status(status.state === 'READY' ? 200 : 202).json({
+      ...status,
+      sourceOfFundsOptions: INDIVIDUAL_SOURCE_OF_FUNDS,
+    });
+  } catch (err: any) {
+    console.error('Error provisioning deposit account:', err);
+    res.status(500).json({
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: err?.message || 'Failed to provision deposit account',
       },
     });
   }

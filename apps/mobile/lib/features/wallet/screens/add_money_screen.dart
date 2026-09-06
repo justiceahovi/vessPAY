@@ -8,6 +8,7 @@ import '../../travel/widgets/traveling_in_indicator.dart';
 import '../models/wallet_currency_model.dart';
 import '../providers/currency_providers.dart';
 import '../providers/wallet_providers.dart';
+import '../widgets/deposit_account_gate.dart';
 import '../widgets/wewire_checkout_sheet.dart';
 
 class AddMoneyScreen extends ConsumerStatefulWidget {
@@ -102,36 +103,40 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
       ),
       body: KycGate(
         action: KycGatedAction.addMoney,
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Traveling In indicator
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.only(bottom: 16),
-                    child: TravelingInIndicator.compact(),
+        // Basic KYC clears the gate above; a deposit additionally needs an
+        // issued WeWire account, which needs EDD and a source-of-funds answer.
+        child: DepositAccountGate(
+          child: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Traveling In indicator
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.only(bottom: 16),
+                      child: TravelingInIndicator.compact(),
+                    ),
                   ),
-                ),
 
-                // Switch view based on step
-                if (topupState.step == TopupStep.enterAmount ||
-                    topupState.step == TopupStep.initiating) ...[
-                  _buildAmountEntrySection(
-                    ghsEquivalent,
-                    topupState.step == TopupStep.initiating,
-                  ),
-                ] else if (topupState.step ==
-                    TopupStep.waitingConfirmation) ...[
-                  _buildWaitingConfirmationSection(topupState),
-                ] else if (topupState.step == TopupStep.completed) ...[
-                  _buildCompletedSection(topupState),
-                ] else if (topupState.step == TopupStep.failed) ...[
-                  _buildFailedSection(topupState),
+                  // Switch view based on step
+                  if (topupState.step == TopupStep.enterAmount ||
+                      topupState.step == TopupStep.initiating) ...[
+                    _buildAmountEntrySection(
+                      ghsEquivalent,
+                      topupState.step == TopupStep.initiating,
+                    ),
+                  ] else if (topupState.step ==
+                      TopupStep.waitingConfirmation) ...[
+                    _buildWaitingConfirmationSection(topupState),
+                  ] else if (topupState.step == TopupStep.completed) ...[
+                    _buildCompletedSection(topupState),
+                  ] else if (topupState.step == TopupStep.failed) ...[
+                    _buildFailedSection(topupState),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

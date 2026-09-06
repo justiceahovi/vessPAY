@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers.dart';
+import '../models/deposit_account_model.dart';
 import '../models/topup_model.dart';
 import '../models/wallet_balance_model.dart';
 import '../repositories/wallet_repository.dart';
@@ -55,6 +56,15 @@ final primaryWalletBalanceProvider =
       orElse: () => WalletBalanceModel(currency: activeCurrency, balance: 0.0),
     );
   });
+});
+
+/// Deposit-account setup state. Read-only, so it is safe to poll while WeWire
+/// provisions the account.
+final depositAccountProvider =
+    FutureProvider<DepositAccountModel>((ref) async {
+  // Re-read whenever the held currency changes: accounts are per-currency.
+  ref.watch(activeWalletCurrencyCodeProvider);
+  return ref.watch(walletRepositoryProvider).getDepositAccount();
 });
 
 /// Balances still held in currencies other than the active one.

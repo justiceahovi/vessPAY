@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vesspay/features/wallet/models/deposit_account_model.dart';
 import 'package:vesspay/core/navigation/floating_bottom_nav_bar.dart';
 import 'package:vesspay/core/navigation/main_app_shell.dart';
 import 'package:vesspay/core/providers.dart';
@@ -78,6 +79,22 @@ class NavMockWalletRepository implements WalletRepository {
   @override
   Future<TopupResponseModel> confirmTopup(String fundingTransactionId) async =>
       throw UnimplementedError();
+
+  @override
+  Future<DepositAccountModel> getDepositAccount() async =>
+      const DepositAccountModel(
+        state: DepositAccountState.ready,
+        currency: 'USD',
+      );
+
+  @override
+  Future<DepositAccountModel> provisionDepositAccount({
+    String? sourceOfFunds,
+  }) async =>
+      const DepositAccountModel(
+        state: DepositAccountState.ready,
+        currency: 'USD',
+      );
 }
 
 class NavMockTravelRepository implements TravelRepository {

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/providers.dart';
+import '../models/deposit_account_model.dart';
 import '../models/topup_model.dart';
 import '../models/wallet_balance_model.dart';
 import '../models/wallet_currency_model.dart';
@@ -13,6 +14,13 @@ abstract class WalletRepository {
 
   /// Persists the user's wallet currency choice and returns the stored code.
   Future<String> setPrimaryCurrency(String currencyCode);
+
+  /// Where the user is in deposit-account setup. Read-only, safe to poll.
+  Future<DepositAccountModel> getDepositAccount();
+
+  /// Stores the user's own source-of-funds declaration when given, then asks
+  /// WeWire to issue the account. Issuance is asynchronous.
+  Future<DepositAccountModel> provisionDepositAccount({String? sourceOfFunds});
 
   Future<TopupResponseModel> initiateTopup({
     required double amount,
@@ -74,6 +82,27 @@ class ApiWalletRepository implements WalletRepository {
         }
         return currencyCode.trim().toUpperCase();
       },
+    );
+  }
+
+  @override
+  Future<DepositAccountModel> getDepositAccount() async {
+    return _apiClient.get<DepositAccountModel>(
+      '/api/wallet/deposit-account',
+      fromJson: (data) =>
+          DepositAccountModel.fromJson(data as Map<String, dynamic>),
+    );
+  }
+
+  @override
+  Future<DepositAccountModel> provisionDepositAccount({
+    String? sourceOfFunds,
+  }) async {
+    return _apiClient.post<DepositAccountModel>(
+      '/api/wallet/deposit-account',
+      data: sourceOfFunds == null ? null : {'sourceOfFunds': sourceOfFunds},
+      fromJson: (data) =>
+          DepositAccountModel.fromJson(data as Map<String, dynamic>),
     );
   }
 
