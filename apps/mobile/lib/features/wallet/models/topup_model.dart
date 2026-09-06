@@ -53,6 +53,12 @@ class TopupResponseModel {
   final String? checkoutUrl;
   final String status;
   final double amount;
+
+  /// What actually landed after the rails took their cut. Null until settled.
+  final double? settledAmount;
+
+  /// Fee deducted in transit, so the shortfall is explainable.
+  final double fee;
   final String currency;
   final TopupAccountDetails? accountDetails;
 
@@ -66,6 +72,8 @@ class TopupResponseModel {
     this.checkoutUrl,
     required this.status,
     required this.amount,
+    this.settledAmount,
+    this.fee = 0.0,
     required this.currency,
     this.accountDetails,
     this.accountSource = 'local',
@@ -73,6 +81,13 @@ class TopupResponseModel {
 
   /// Whether money can actually be moved through WeWire for this top-up.
   bool get isWeWireBacked => accountSource == 'wewire';
+
+  /// What the wallet was actually credited, falling back to the sent amount
+  /// while the deposit is still in flight.
+  double get creditedAmount => settledAmount ?? amount;
+
+  /// True when the rails took a cut, so the UI can explain the difference.
+  bool get hasFee => fee > 0;
 
   factory TopupResponseModel.fromJson(Map<String, dynamic> json) {
     return TopupResponseModel(
@@ -85,6 +100,12 @@ class TopupResponseModel {
       amount: (json['amount'] is num)
           ? (json['amount'] as num).toDouble()
           : double.tryParse(json['amount']?.toString() ?? '0') ?? 0.0,
+      settledAmount: (json['settledAmount'] is num)
+          ? (json['settledAmount'] as num).toDouble()
+          : double.tryParse(json['settledAmount']?.toString() ?? ''),
+      fee: (json['fee'] is num)
+          ? (json['fee'] as num).toDouble()
+          : double.tryParse(json['fee']?.toString() ?? '') ?? 0.0,
       currency: (json['currency'] as String?) ?? 'USD',
       accountSource: (json['accountSource'] as String?) ?? 'local',
       accountDetails: json['accountDetails'] != null

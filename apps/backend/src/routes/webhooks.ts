@@ -6,6 +6,55 @@ import { DEFAULT_WALLET_CURRENCY } from '../lib/currencies';
 const router = Router();
 
 /**
+ * What actually landed, and what the rails took, in wallet units.
+ *
+ * The sent amount and the settled amount differ: 250.00 GBP sent settles as
+ * 249.45 with a 0.55 fee. WeWire reports `amount` gross with `fee` alongside,
+ * and `balanceAfter` minus `balanceBefore` as the net. Prefer the observed net,
+ * fall back to gross minus fee, and only fall back to the requested figure when
+ * the payload says nothing about value.
+ */
+export function parseSettlement(
+  data: any,
+  requestedAmount: number
+): { settled: number; fee: number } {
+  const num = (v: unknown): number | null => {
+    if (v === null || v === undefined || v === '') return null;
+    const n = typeof v === 'number' ? v : Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const round = (n: number) => Number(n.toFixed(2));
+
+  const reportedFee = num(data?.fee) ?? 0;
+  const gross = num(data?.amount);
+  const before = num(data?.balanceBefore);
+  const after = num(data?.balanceAfter);
+
+  if (before !== null && after !== null) {
+    const net = after - before;
+    if (net > 0) {
+      // Trust the observed movement, and derive the fee from it when the
+      // payload reports a gross amount to compare against.
+      const derivedFee = gross !== null ? Math.max(gross - net, 0) : reportedFee;
+      return { settled: round(net), fee: round(derivedFee) };
+    }
+  }
+
+  if (gross !== null) {
+    const net = gross - reportedFee;
+    if (net > 0) return { settled: round(net), fee: round(reportedFee) };
+  }
+
+  return { settled: requestedAmount, fee: round(reportedFee) };
+}
+
+/** Convenience wrapper for callers that only need the credited figure. */
+export function parseSettledAmount(data: any, requestedAmount: number): number {
+  return parseSettlement(data, requestedAmount).settled;
+}
+
+
+/**
  * POST /api/webhooks/wewire
  * WeWire webhook ingestion endpoint.
  * 
@@ -137,9 +186,21 @@ router.post('/wewire', async (req: Request, res: Response): Promise<void> => {
         if (fundingTx) {
           // If already COMPLETED, do not increment again (idempotency defense)
           if (fundingTx.status !== 'COMPLETED') {
+            // Credit what actually settled, not what the user asked to send:
+            // the rails take a fee on the way in (a 250.00 GBP deposit settles
+            // as 249.45). Crediting the requested figure would invent money.
+            const { settled: settledAmount, fee } = parseSettlement(
+              data,
+              Number(fundingTx.amount)
+            );
+
             await tx.fundingTransaction.update({
               where: { id: fundingTx.id },
-              data: { status: 'COMPLETED' },
+              data: {
+                status: 'COMPLETED',
+                settledAmount,
+                fee,
+              },
             });
 
             // Find or create matching wallet
@@ -156,7 +217,7 @@ router.post('/wewire', async (req: Request, res: Response): Promise<void> => {
                 data: {
                   userId: fundingTx.userId,
                   currency: walletCurrency,
-                  balance: fundingTx.amount,
+                  balance: settledAmount,
                 },
               });
             } else {
@@ -164,14 +225,14 @@ router.post('/wewire', async (req: Request, res: Response): Promise<void> => {
                 where: { id: wallet.id },
                 data: {
                   balance: {
-                    increment: fundingTx.amount,
+                    increment: settledAmount,
                   },
                 },
               });
             }
 
             console.log(
-              `[Webhook] Funding transaction ${fundingTx.id} COMPLETED. Credited ${fundingTx.amount} ${walletCurrency} to user ${fundingTx.userId}.`
+              `[Webhook] Funding transaction ${fundingTx.id} COMPLETED. Credited ${settledAmount} ${walletCurrency} to user ${fundingTx.userId} (sent ${Number(fundingTx.amount)}, fee ${fee}).`
             );
           } else {
             console.log(

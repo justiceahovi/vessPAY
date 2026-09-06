@@ -407,6 +407,18 @@ router.post('/topup', authenticate, async (req: Request, res: Response): Promise
     // Bank details only exist once the account is ACTIVE: a REQUESTED account
     // has every field null, which would render an empty details card. Fall back
     // to the local demo rails rather than showing blanks.
+    if (!depositAccount || !depositAccount.isActive) {
+      res.status(409).json({
+        error: {
+          code: 'DEPOSIT_ACCOUNT_NOT_READY',
+          message:
+            'A deposit account has to be issued before money can be added. Complete verification and wait for the account to go live.',
+          state: depositAccount ? depositAccount.status : 'NOT_REQUESTED',
+        },
+      });
+      return;
+    }
+
     const accountDetails =
       depositAccount && depositAccount.isActive
         ? {
@@ -478,7 +490,12 @@ router.get('/topup/:id', authenticate, async (req: Request, res: Response): Prom
       fundingTransactionId: fundingTx.id,
       checkoutId: fundingTx.checkoutId,
       status: fundingTx.status,
+      // `amount` is what the user sent; `settledAmount` is what the rails
+      // actually delivered, and `fee` explains the difference.
       amount: Number(fundingTx.amount),
+      settledAmount:
+        fundingTx.settledAmount === null ? null : Number(fundingTx.settledAmount),
+      fee: Number(fundingTx.fee),
       currency: fundingTx.currency,
       createdAt: fundingTx.createdAt.toISOString(),
       updatedAt: fundingTx.updatedAt.toISOString(),
@@ -617,120 +634,6 @@ router.post('/topup/:id/simulate', authenticate, async (req: Request, res: Respo
       error: {
         code: status === 400 ? 'DEPOSIT_REJECTED' : 'WEWIRE_UNAVAILABLE',
         message: err?.message || 'Failed to simulate deposit',
-      },
-    });
-  }
-});
-
-/**
- * POST /api/wallet/topup/:id/confirm
- * Confirms a sandbox funding transaction and atomically credits the user's wallet.
- */
-router.post('/topup/:id/confirm', authenticate, async (req: Request, res: Response): Promise<void> => {
-  try {
-    const userId = req.user!.id;
-    const { id } = req.params;
-
-    const fundingTx = await prisma.fundingTransaction.findFirst({
-      where: {
-        id,
-        userId,
-      },
-    });
-
-    if (!fundingTx) {
-      res.status(404).json({
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Funding transaction not found',
-        },
-      });
-      return;
-    }
-
-    if (fundingTx.status === 'COMPLETED') {
-      const wallet = await prisma.wallet.findFirst({
-        where: { userId, currency: fundingTx.currency },
-      });
-      res.status(200).json({
-        status: 'COMPLETED',
-        fundingTransactionId: fundingTx.id,
-        amount: Number(fundingTx.amount),
-        currency: fundingTx.currency,
-        balance: Number(wallet?.balance ?? 0),
-        message: 'Funding transaction already completed',
-      });
-      return;
-    }
-
-    // Atomically complete the funding and credit the user's wallet
-    const updated = await prisma.$transaction(async (tx) => {
-      const updatedTx = await tx.fundingTransaction.update({
-        where: { id: fundingTx.id },
-        data: { status: 'COMPLETED' },
-      });
-
-      // Credit wallet
-      const existingWallet = await tx.wallet.findFirst({
-        where: { userId, currency: fundingTx.currency },
-      });
-
-      let wallet;
-      if (existingWallet) {
-        wallet = await tx.wallet.update({
-          where: { id: existingWallet.id },
-          data: {
-            balance: {
-              increment: fundingTx.amount,
-            },
-          },
-        });
-      } else {
-        wallet = await tx.wallet.create({
-          data: {
-            userId,
-            currency: fundingTx.currency,
-            balance: fundingTx.amount,
-          },
-        });
-      }
-
-      // Record in webhook_events as simulated pay_in
-      await tx.webhookEvent.create({
-        data: {
-          provider: 'wewire',
-          eventType: 'transaction.pay_in',
-          eventId: `sim_payin_${Date.now()}_${fundingTx.id.slice(0, 8)}`,
-          payload: {
-            data: {
-              fundingTransactionId: fundingTx.id,
-              checkoutId: fundingTx.checkoutId,
-              amount: Number(fundingTx.amount),
-              currency: fundingTx.currency,
-              status: 'SUCCESSFUL',
-            },
-            eventType: 'transaction.pay_in',
-          },
-          processed: true,
-        },
-      });
-
-      return { fundingTx: updatedTx, wallet };
-    });
-
-    res.status(200).json({
-      status: 'COMPLETED',
-      fundingTransactionId: updated.fundingTx.id,
-      amount: Number(updated.fundingTx.amount),
-      currency: updated.fundingTx.currency,
-      balance: Number(updated.wallet.balance),
-    });
-  } catch (err: any) {
-    console.error('Error confirming funding transaction:', err);
-    res.status(500).json({
-      error: {
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to confirm funding transaction',
       },
     });
   }

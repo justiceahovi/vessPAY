@@ -237,24 +237,7 @@ class TopupNotifier extends StateNotifier<TopupState> {
     }
   }
 
-  Future<bool> confirmTopup(String fundingTransactionId) async {
-    try {
-      final confirmed = await _repository.confirmTopup(fundingTransactionId);
-      _stopPolling();
-      state = state.copyWith(
-        step: TopupStep.completed,
-        response: confirmed,
-        isPolling: false,
-      );
-      _ref.invalidate(walletBalancesProvider);
-      return true;
-    } catch (e) {
-      state = state.copyWith(
-        errorMessage: 'Failed to confirm deposit: $e',
-      );
-      return false;
-    }
-  }
+
 
   @override
   void dispose() {

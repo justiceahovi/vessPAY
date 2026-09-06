@@ -85,8 +85,8 @@ class _WeWireCheckoutSheetState extends ConsumerState<WeWireCheckoutSheet> {
     });
 
     final notifier = ref.read(topupControllerProvider.notifier);
-    final success =
-        await notifier.confirmTopup(widget.response.fundingTransactionId);
+    final success = await notifier
+        .simulateWeWireDeposit(widget.response.fundingTransactionId);
 
     if (mounted) {
       setState(() {

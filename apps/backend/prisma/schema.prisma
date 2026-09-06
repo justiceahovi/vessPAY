@@ -69,7 +69,12 @@ model Wallet {
 model FundingTransaction {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId     String   @map("user_id") @db.Uuid
+  /// What the user asked to send.
   amount     Decimal  @db.Decimal(14, 2)
+  /// What actually landed after the rails took their cut. Null until settled.
+  settledAmount Decimal? @map("settled_amount") @db.Decimal(14, 2)
+  /// Fee deducted in transit, so the difference is explainable to the user.
+  fee        Decimal  @default(0.00) @db.Decimal(14, 2)
   currency   String   @default("USD")
   checkoutId String?  @map("checkout_id")
   status     String   @default("PENDING")

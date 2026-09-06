@@ -87,17 +87,6 @@ class MockWalletRepositoryForAddMoney implements WalletRepository {
     );
   }
 
-  @override
-  Future<TopupResponseModel> confirmTopup(String fundingTransactionId) async {
-    currentStatus = 'COMPLETED';
-    return TopupResponseModel(
-      fundingTransactionId: fundingTransactionId,
-      checkoutId: 'chk-test-123456',
-      status: 'COMPLETED',
-      amount: 100.0,
-      currency: 'USD',
-    );
-  }
 
   @override
   Future<DepositAccountModel> getDepositAccount() async =>

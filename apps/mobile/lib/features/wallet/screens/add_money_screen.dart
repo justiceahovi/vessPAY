@@ -536,18 +536,13 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
               child: ElevatedButton.icon(
                 key: const Key('simulate_deposit_now_button'),
                 onPressed: () {
-                  final notifier = ref.read(topupControllerProvider.notifier);
-                  if (resp.isWeWireBacked) {
-                    notifier.simulateWeWireDeposit(resp.fundingTransactionId);
-                  } else {
-                    notifier.confirmTopup(resp.fundingTransactionId);
-                  }
+                  ref
+                      .read(topupControllerProvider.notifier)
+                      .simulateWeWireDeposit(resp.fundingTransactionId);
                 },
                 icon: const Icon(Icons.bolt, size: 20),
                 label: Text(
-                  resp.isWeWireBacked
-                      ? 'Simulate Bank Deposit (${_currency.format(state.amount)})'
-                      : '⚡ Simulate Instant Deposit (${_currency.format(state.amount)})',
+                  'Simulate Bank Deposit (${_currency.format(state.amount)})',
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -613,6 +608,7 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
   }
 
   Widget _buildCompletedSection(TopupState state) {
+    final resp = state.response;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -651,7 +647,7 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
           const SizedBox(height: 8),
 
           Text(
-            '+${_currency.format(state.amount)} ${_currency.code} has been credited to your VessPay Travel Wallet.',
+            '+${_currency.format(resp?.creditedAmount ?? state.amount)} ${_currency.code} has been credited to your VessPay Travel Wallet.',
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontFamily: 'StyreneB',
@@ -660,6 +656,41 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
               height: 1.4,
             ),
           ),
+
+          // The rails take a cut on the way in, so the credited amount is less
+          // than the amount sent. Show the breakdown rather than leaving the
+          // user to notice the shortfall on their own.
+          if (resp != null && resp.hasFee) ...[
+            const SizedBox(height: 16),
+            Container(
+              key: const Key('deposit_fee_breakdown'),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceSoft,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.hairlineSoft),
+              ),
+              child: Column(
+                children: [
+                  _buildSummaryRow(
+                    'Amount sent',
+                    '${_currency.format(resp.amount)} ${resp.currency}',
+                  ),
+                  const Divider(color: AppColors.hairlineSoft, height: 16),
+                  _buildSummaryRow(
+                    'Bank fee',
+                    '-${_currency.format(resp.fee)} ${resp.currency}',
+                  ),
+                  const Divider(color: AppColors.hairlineSoft, height: 16),
+                  _buildSummaryRow(
+                    'Credited to wallet',
+                    '${_currency.format(resp.creditedAmount)} ${resp.currency}',
+                    isHighlighted: true,
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           const SizedBox(height: 28),
 

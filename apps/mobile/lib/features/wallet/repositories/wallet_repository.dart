@@ -27,7 +27,6 @@ abstract class WalletRepository {
     String currency = kDefaultWalletCurrency,
   });
   Future<TopupResponseModel> getTopupStatus(String fundingTransactionId);
-  Future<TopupResponseModel> confirmTopup(String fundingTransactionId);
 
   /// Asks WeWire to drop a sandbox deposit onto the user's real virtual
   /// account. The wallet is credited by the resulting pay-in webhook, not by
@@ -144,14 +143,7 @@ class ApiWalletRepository implements WalletRepository {
     );
   }
 
-  @override
-  Future<TopupResponseModel> confirmTopup(String fundingTransactionId) async {
-    return _apiClient.post<TopupResponseModel>(
-      '/api/wallet/topup/$fundingTransactionId/confirm',
-      fromJson: (data) =>
-          TopupResponseModel.fromJson(data as Map<String, dynamic>),
-    );
-  }
+
 }
 
 final walletRepositoryProvider = Provider<WalletRepository>((ref) {

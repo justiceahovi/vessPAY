@@ -241,9 +241,6 @@ class StubWalletRepository implements WalletRepository {
   Future<TopupResponseModel> getTopupStatus(String fundingTransactionId) async =>
       throw UnimplementedError();
 
-  @override
-  Future<TopupResponseModel> confirmTopup(String fundingTransactionId) async =>
-      throw UnimplementedError();
 
   @override
   Future<DepositAccountModel> getDepositAccount() async =>
