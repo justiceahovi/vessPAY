@@ -1,7 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/db';
 import { authenticate } from '../middleware/auth';
-import { initiateWeWireFunding } from '../lib/wewire';
+import {
+  getHostedKycLink,
+  initiateWeWireFunding,
+  resolveWeWireDepositAccount,
+  simulateWeWireDeposit,
+  WeWireApiError,
+} from '../lib/wewire';
 import {
   DEFAULT_WALLET_CURRENCY,
   SUPPORTED_WALLET_CURRENCIES,
@@ -270,6 +276,23 @@ router.post('/topup', authenticate, async (req: Request, res: Response): Promise
       currency,
     });
 
+    // Prefer the user's real WeWire virtual account for this currency. When
+    // WeWire is unreachable or the sub-customer is not KYC-approved yet we
+    // still hand back the local demo rails rather than blocking the top-up.
+    let depositAccount = null;
+    if (user.wewireSubcustomerId) {
+      try {
+        depositAccount = await resolveWeWireDepositAccount(
+          user.wewireSubcustomerId,
+          currency
+        );
+      } catch (err: any) {
+        console.warn(
+          `[Wallet] Could not resolve WeWire deposit account for ${user.id}: ${err?.message}`
+        );
+      }
+    }
+
     const fundingTx = await prisma.fundingTransaction.create({
       data: {
         userId: user.id,
@@ -280,6 +303,31 @@ router.post('/topup', authenticate, async (req: Request, res: Response): Promise
       },
     });
 
+    if (depositAccount) {
+      const wallet = await prisma.wallet.findFirst({
+        where: { userId: user.id, currency },
+      });
+      if (wallet) {
+        await prisma.wallet.update({
+          where: { id: wallet.id },
+          data: { wewireAccountId: depositAccount.accountId },
+        });
+      }
+    }
+
+    const accountDetails = depositAccount
+      ? {
+          bankName: depositAccount.account.bankName ?? null,
+          accountName: depositAccount.account.accountName ?? null,
+          accountNumber: depositAccount.account.accountNumber ?? null,
+          iban: depositAccount.account.iban ?? null,
+          bic: depositAccount.account.bic ?? null,
+          paymentRails: depositAccount.account.paymentRails ?? [],
+          currency: depositAccount.currency,
+          status: depositAccount.status,
+        }
+      : fundingInfo.accountDetails;
+
     res.status(201).json({
       fundingTransactionId: fundingTx.id,
       checkoutId: fundingInfo.checkoutId,
@@ -287,7 +335,10 @@ router.post('/topup', authenticate, async (req: Request, res: Response): Promise
       status: fundingTx.status,
       amount: Number(fundingTx.amount),
       currency: fundingTx.currency,
-      accountDetails: fundingInfo.accountDetails,
+      accountDetails,
+      accountSource: depositAccount ? 'wewire' : 'local',
+      wewireAccountId: depositAccount?.accountId ?? null,
+      accountReady: depositAccount?.isActive ?? false,
       createdAt: fundingTx.createdAt.toISOString(),
     });
   } catch (err: any) {
@@ -342,6 +393,134 @@ router.get('/topup/:id', authenticate, async (req: Request, res: Response): Prom
       error: {
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to retrieve funding transaction',
+      },
+    });
+  }
+});
+
+/**
+ * POST /api/wallet/topup/:id/simulate
+ * Sandbox only. Asks WeWire to drop a test deposit onto the user's virtual
+ * account for this funding transaction. The wallet is NOT credited here: the
+ * balance moves when WeWire delivers the resulting pay-in webhook, which is
+ * the same path a real deposit takes.
+ */
+router.post('/topup/:id/simulate', authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = req.user!;
+    const { id } = req.params;
+
+    if (!user.wewireSubcustomerId) {
+      res.status(409).json({
+        error: {
+          code: 'NO_SUBCUSTOMER',
+          message: 'This account has no WeWire sub-customer to deposit into',
+        },
+      });
+      return;
+    }
+
+    const fundingTx = await prisma.fundingTransaction.findFirst({
+      where: { id, userId: user.id },
+    });
+
+    if (!fundingTx) {
+      res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'Funding transaction not found' },
+      });
+      return;
+    }
+
+    if (fundingTx.status === 'COMPLETED') {
+      res.status(409).json({
+        error: {
+          code: 'ALREADY_COMPLETED',
+          message: 'Funding transaction has already been credited',
+        },
+      });
+      return;
+    }
+
+    const depositAccount = await resolveWeWireDepositAccount(
+      user.wewireSubcustomerId,
+      fundingTx.currency
+    );
+
+    if (!depositAccount) {
+      res.status(503).json({
+        error: {
+          code: 'NO_DEPOSIT_ACCOUNT',
+          message: `No WeWire virtual account available for ${fundingTx.currency}. The sub-customer must be KYC approved and have an ACTIVE account.`,
+        },
+      });
+      return;
+    }
+
+    if (!depositAccount.isActive) {
+      res.status(409).json({
+        error: {
+          code: 'ACCOUNT_NOT_ACTIVE',
+          message: `Virtual account is ${depositAccount.status}. Issuance is asynchronous — retry once it reaches ACTIVE.`,
+          accountId: depositAccount.accountId,
+          status: depositAccount.status,
+        },
+      });
+      return;
+    }
+
+    await simulateWeWireDeposit({
+      subCustomerId: user.wewireSubcustomerId,
+      accountId: depositAccount.accountId,
+      amount: Number(fundingTx.amount),
+      currency: fundingTx.currency,
+    });
+
+    res.status(202).json({
+      status: 'DEPOSIT_SIMULATED',
+      fundingTransactionId: fundingTx.id,
+      amount: Number(fundingTx.amount),
+      currency: fundingTx.currency,
+      wewireAccountId: depositAccount.accountId,
+      accountStatus: depositAccount.status,
+      message:
+        'WeWire accepted the test deposit. The wallet is credited when the pay-in webhook arrives.',
+    });
+  } catch (err: any) {
+    console.error('Error simulating WeWire deposit:', err?.message || err);
+
+    // Account issuance is gated on Enhanced Due Diligence. Hand back the hosted
+    // verification link so the app can send the user straight to it.
+    if (err instanceof WeWireApiError && err.code === 'SUBCUSTOMER_ENHANCED_KYC_REQUIRED') {
+      let kycLinkUrl: string | null = null;
+      try {
+        kycLinkUrl = (await getHostedKycLink(req.user!.wewireSubcustomerId!)).url;
+      } catch {
+        // The link is a convenience; the 403 still stands without it.
+      }
+      res.status(403).json({
+        error: {
+          code: 'ENHANCED_KYC_REQUIRED',
+          message:
+            'Enhanced verification must be completed before a deposit account can be issued.',
+          kycLinkUrl,
+        },
+      });
+      return;
+    }
+
+    if (err instanceof WeWireApiError && err.code === 'MISSING_COMPLIANCE_DETAILS') {
+      res.status(400).json({
+        error: { code: err.code, message: err.message },
+      });
+      return;
+    }
+
+    // A 400 from WeWire here means production, or an account that cannot take one.
+    const status = err?.status === 400 ? 400 : 502;
+    res.status(status).json({
+      error: {
+        code: status === 400 ? 'DEPOSIT_REJECTED' : 'WEWIRE_UNAVAILABLE',
+        message: err?.message || 'Failed to simulate deposit',
       },
     });
   }

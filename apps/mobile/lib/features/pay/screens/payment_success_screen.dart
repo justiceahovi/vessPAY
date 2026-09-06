@@ -33,7 +33,7 @@ class PaymentSuccessScreen extends ConsumerWidget {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) {
           ref.read(payFlowProvider.notifier).reset();
-          context.go(AppRoutes.wallet);
+          context.go(AppRoutes.home);
         }
       },
       child: Scaffold(
@@ -281,7 +281,7 @@ class PaymentSuccessScreen extends ConsumerWidget {
                     key: const Key('success_done_button'),
                     onPressed: () {
                       ref.read(payFlowProvider.notifier).reset();
-                      context.go(AppRoutes.wallet);
+                      context.go(AppRoutes.home);
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,

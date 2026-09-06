@@ -241,10 +241,10 @@ void main() {
       expect(find.text('View Updated Wallet'), findsOneWidget);
     });
 
-    testWidgets('Wallet screen Add Money button routes directly to AddMoneyScreen',
+    testWidgets('Home screen Add Money button routes directly to AddMoneyScreen',
         (tester) async {
       final mockRepo = MockWalletRepositoryForAddMoney();
-      final router = createAppRouter(initialLocation: AppRoutes.wallet);
+      final router = createAppRouter(initialLocation: AppRoutes.home);
 
       await tester.pumpWidget(
         ProviderScope(

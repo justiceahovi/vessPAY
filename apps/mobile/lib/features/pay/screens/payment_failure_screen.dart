@@ -29,7 +29,7 @@ class PaymentFailureScreen extends ConsumerWidget {
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) {
-          context.go(AppRoutes.wallet);
+          context.go(AppRoutes.home);
         }
       },
       child: Scaffold(
@@ -251,7 +251,7 @@ class PaymentFailureScreen extends ConsumerWidget {
                     key: const Key('failure_wallet_button'),
                     onPressed: () {
                       ref.read(payFlowProvider.notifier).reset();
-                      context.go(AppRoutes.wallet);
+                      context.go(AppRoutes.home);
                     },
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.ink,

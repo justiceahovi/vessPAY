@@ -6,6 +6,7 @@ import '../routing/app_routes.dart';
 import '../theme/app_colors.dart';
 
 /// A modern, institutional-grade 3-item floating bottom navigation bar
+/// laid out as Profile | Home | Transactions, with Home as the centre default
 /// adhering strictly to DESIGN.md tokens:
 /// - Vertical orientation: icons on top, labels directly underneath
 /// - Pill geometry: rounded.pill (100px)
@@ -15,13 +16,11 @@ import '../theme/app_colors.dart';
 class FloatingBottomNavBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int>? onTabSelected;
-  final String thirdTabLabel;
 
   const FloatingBottomNavBar({
     super.key,
     required this.currentIndex,
     this.onTabSelected,
-    this.thirdTabLabel = 'Cards',
   });
 
   void _handleTap(BuildContext context, int index) {
@@ -34,15 +33,17 @@ class FloatingBottomNavBar extends StatelessWidget {
     switch (index) {
       case 0:
         if (currentIndex != 0) {
-          context.go(AppRoutes.home);
+          context.go(AppRoutes.profile);
         }
         break;
       case 1:
-        context.push(AppRoutes.payAnyone);
+        if (currentIndex != 1) {
+          context.go(AppRoutes.home);
+        }
         break;
       case 2:
         if (currentIndex != 2) {
-          context.push(AppRoutes.wallet);
+          context.go(AppRoutes.transactionList);
         }
         break;
     }
@@ -77,44 +78,49 @@ class FloatingBottomNavBar extends StatelessWidget {
               ],
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  // 1. Home Tab
+                  // 1. Profile Tab
                   Expanded(
                     child: _buildVerticalNavItem(
                       context: context,
                       index: 0,
                       icon: currentIndex == 0
+                          ? Icons.person_rounded
+                          : Icons.person_outline_rounded,
+                      label: 'Profile',
+                      isSelected: currentIndex == 0,
+                      key: const Key('nav_item_profile'),
+                    ),
+                  ),
+
+                  // 2. Home Tab (centre, default destination)
+                  Expanded(
+                    child: _buildVerticalNavItem(
+                      context: context,
+                      index: 1,
+                      icon: currentIndex == 1
                           ? Icons.home_rounded
                           : Icons.home_outlined,
                       label: 'Home',
-                      isSelected: currentIndex == 0,
+                      isSelected: currentIndex == 1,
                       key: const Key('nav_item_home'),
                     ),
                   ),
 
-                  // 2. Center Pay Hero CTA
-                  Expanded(
-                    child: _buildCenterPayItem(
-                      context: context,
-                      isSelected: currentIndex == 1,
-                      key: const Key('nav_item_pay'),
-                    ),
-                  ),
-
-                  // 3. Cards / Wallet Tab
+                  // 3. Transactions Tab
                   Expanded(
                     child: _buildVerticalNavItem(
                       context: context,
                       index: 2,
                       icon: currentIndex == 2
-                          ? Icons.credit_card_rounded
-                          : Icons.credit_card_outlined,
-                      label: thirdTabLabel,
+                          ? Icons.receipt_long_rounded
+                          : Icons.receipt_long_outlined,
+                      label: 'Transactions',
                       isSelected: currentIndex == 2,
-                      key: const Key('nav_item_cards'),
+                      key: const Key('nav_item_transactions'),
                     ),
                   ),
                 ],
@@ -132,8 +138,8 @@ class FloatingBottomNavBar extends StatelessWidget {
     required bool isSelected,
     Key? key,
   }) {
-    final activeColor = AppColors.primary;
-    final inactiveColor = AppColors.muted;
+    final iconColor = isSelected ? AppColors.onPrimary : AppColors.muted;
+    final textColor = isSelected ? AppColors.onPrimary : AppColors.muted;
 
     return Material(
       key: key,
@@ -141,91 +147,55 @@ class FloatingBottomNavBar extends StatelessWidget {
       child: InkWell(
         onTap: () => _handleTap(context, index),
         borderRadius: BorderRadius.circular(100),
-        splashColor: AppColors.primary.withValues(alpha: 0.08),
+        splashColor: isSelected
+            ? Colors.white.withValues(alpha: 0.15)
+            : AppColors.primary.withValues(alpha: 0.08),
         highlightColor: Colors.transparent,
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 22,
-                color: isSelected ? activeColor : inactiveColor,
-              ),
-              const SizedBox(height: 3),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  color: isSelected ? activeColor : inactiveColor,
-                  letterSpacing: -0.1,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(100),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.30),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 21,
+                  color: iconColor,
                 ),
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    color: textColor,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildCenterPayItem({
-    required BuildContext context,
-    required bool isSelected,
-    Key? key,
-  }) {
-    return Material(
-      key: key,
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _handleTap(context, 1),
-        borderRadius: BorderRadius.circular(100),
-        splashColor: AppColors.primary.withValues(alpha: 0.08),
-        highlightColor: Colors.transparent,
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.35),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.send_rounded,
-                    size: 15,
-                    color: AppColors.onPrimary,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                'Pay',
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primary,
-                  letterSpacing: -0.1,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }

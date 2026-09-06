@@ -1039,3 +1039,227 @@ export async function lookupAccountName(params: {
     return null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Sub-customer virtual accounts (deposits)
+//
+// Verified against the stage sandbox:
+//   GET  /v1/subcustomers/{id}/accounts                        -> bare array
+//   POST /v1/subcustomers/{id}/accounts/request                -> issue one
+//   POST /v1/subcustomers/{id}/accounts/{aid}/simulate-deposit -> sandbox only
+//
+// There is no separate "create wallet" call: accounts hang off the sub-customer
+// and the business wallet is credited when funds land on one. Account issuance
+// is gated on Enhanced Due Diligence, so a sub-customer that is merely
+// onboardingStatus APPROVED is rejected with SUBCUSTOMER_ENHANCED_KYC_REQUIRED.
+// ---------------------------------------------------------------------------
+
+function wewireConfig(): { apiKey: string; baseUrl: string } | null {
+  const apiKey = process.env.WEWIRE_API_KEY;
+  if (!apiKey) return null;
+  const baseUrl = (
+    process.env.WEWIRE_BASE_URL || 'https://stage-capi.wewireafrica.com'
+  ).replace(/\/$/, '');
+  return { apiKey, baseUrl };
+}
+
+export class WeWireApiError extends Error {
+  readonly status: number;
+  readonly code: string | null;
+
+  constructor(message: string, status: number, code: string | null) {
+    super(message);
+    this.name = 'WeWireApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+/** Single place for the request/parse/error shape every WeWire call shares. */
+async function wewireRequest(
+  path: string,
+  init: { method: 'GET' | 'POST'; body?: unknown } = { method: 'GET' }
+): Promise<any> {
+  const config = wewireConfig();
+  if (!config) {
+    throw new Error('WEWIRE_API_KEY is not configured');
+  }
+
+  const res = await fetch(`${config.baseUrl}${path}`, {
+    method: init.method,
+    headers: {
+      'ww-api-key': config.apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+  });
+
+  const text = await res.text();
+  let data: any;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
+
+  if (!res.ok) {
+    const message =
+      (typeof data === 'object' && (data?.error?.message || data?.message)) ||
+      (typeof data === 'string' && data) ||
+      JSON.stringify(data);
+    const code =
+      (typeof data === 'object' && (data?.error?.code || data?.code)) || null;
+    throw new WeWireApiError(
+      `WeWire ${init.method} ${path} failed: ${message}`,
+      res.status,
+      code
+    );
+  }
+
+  return data;
+}
+
+/** Unwraps the bare-array and `{ data: [...] }` shapes WeWire list routes use. */
+function asArray(payload: any): any[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  return [];
+}
+
+export interface WeWireSubCustomerAccount {
+  id: string;
+  currency: string;
+  /** REQUESTED | PENDING | ACTIVE | DENIED | SUSPENDED | CLOSED */
+  status: string;
+  accountName?: string;
+  accountNumber?: string;
+  iban?: string;
+  bic?: string;
+  routingNumber?: string;
+  sortCode?: string;
+  bankName?: string;
+  paymentRails?: string[];
+}
+
+/**
+ * Compliance answers WeWire requires when issuing a USD account. These are the
+ * user's own declarations, so callers must supply them: never invent a value.
+ */
+export interface AccountRequestDetails {
+  sourceOfFunds?: string;
+  occupation?: string;
+  employment_status?: string;
+  account_purpose?: string;
+  account_purpose_other?: string;
+  expected_monthly_payments_usd?: string;
+  acting_as_intermediary?: boolean;
+}
+
+export async function listWeWireSubCustomerAccounts(
+  subCustomerId: string
+): Promise<WeWireSubCustomerAccount[]> {
+  return asArray(
+    await wewireRequest(`/v1/subcustomers/${subCustomerId}/accounts`)
+  ) as WeWireSubCustomerAccount[];
+}
+
+/**
+ * Requests a virtual account in `currency`. Issuance is asynchronous, so the
+ * returned account is usually REQUESTED or PENDING rather than ACTIVE.
+ */
+export async function requestWeWireAccount(
+  subCustomerId: string,
+  currency: string,
+  details: AccountRequestDetails = {}
+): Promise<WeWireSubCustomerAccount> {
+  const wanted = currency.trim().toUpperCase();
+
+  if (wanted === 'USD' && !details.sourceOfFunds) {
+    throw new WeWireApiError(
+      'A USD account request requires sourceOfFunds (and, in higher-risk jurisdictions, occupation, employment_status and account_purpose)',
+      400,
+      'MISSING_COMPLIANCE_DETAILS'
+    );
+  }
+
+  return wewireRequest(`/v1/subcustomers/${subCustomerId}/accounts/request`, {
+    method: 'POST',
+    body: { currency: wanted, ...details },
+  }) as Promise<WeWireSubCustomerAccount>;
+}
+
+export interface ResolvedDepositAccount {
+  accountId: string;
+  currency: string;
+  status: string;
+  /** True only when the account can actually receive a deposit. */
+  isActive: boolean;
+  account: WeWireSubCustomerAccount;
+}
+
+const USABLE_ACCOUNT_STATUSES = new Set(['ACTIVE', 'REQUESTED', 'PENDING']);
+
+/**
+ * Finds, or requests, the virtual account a deposit in `currency` lands on.
+ *
+ * Returns null when WeWire is not configured so callers can fall back cleanly.
+ * Account issuance is asynchronous: a freshly requested account comes back
+ * `isActive: false` and has to be polled before it can take a deposit.
+ */
+export async function resolveWeWireDepositAccount(
+  subCustomerId: string,
+  currency: string,
+  details: AccountRequestDetails = {}
+): Promise<ResolvedDepositAccount | null> {
+  if (!wewireConfig()) return null;
+
+  const wanted = currency.trim().toUpperCase();
+  const matches = (a: WeWireSubCustomerAccount) =>
+    (a.currency || '').toUpperCase() === wanted &&
+    USABLE_ACCOUNT_STATUSES.has((a.status || '').toUpperCase());
+
+  const existing = await listWeWireSubCustomerAccounts(subCustomerId);
+
+  // Prefer an account usable right now over one still provisioning.
+  const usable =
+    existing.find(
+      (a) => matches(a) && (a.status || '').toUpperCase() === 'ACTIVE'
+    ) || existing.find(matches);
+
+  const account =
+    usable ?? (await requestWeWireAccount(subCustomerId, wanted, details));
+  if (!account?.id) return null;
+
+  const status = (account.status || 'UNKNOWN').toUpperCase();
+  return {
+    accountId: account.id,
+    currency: (account.currency || wanted).toUpperCase(),
+    status,
+    isActive: status === 'ACTIVE',
+    account,
+  };
+}
+
+/**
+ * Triggers a sandbox test deposit onto a virtual account. WeWire rejects this
+ * in production with a 400, so it stays a sandbox-only affordance.
+ * Crediting happens when the resulting pay-in webhook arrives, not here.
+ */
+export async function simulateWeWireDeposit(params: {
+  subCustomerId: string;
+  accountId: string;
+  amount: number;
+  currency: string;
+}): Promise<any> {
+  return wewireRequest(
+    `/v1/subcustomers/${params.subCustomerId}/accounts/${params.accountId}/simulate-deposit`,
+    {
+      method: 'POST',
+      body: {
+        amount: params.amount,
+        currency: params.currency.trim().toUpperCase(),
+      },
+    }
+  );
+}

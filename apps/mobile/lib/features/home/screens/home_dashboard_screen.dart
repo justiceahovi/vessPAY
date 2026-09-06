@@ -13,6 +13,7 @@ import '../../wallet/models/wallet_balance_model.dart';
 import '../../wallet/models/wallet_currency_model.dart';
 import '../../wallet/providers/currency_providers.dart';
 import '../../wallet/providers/wallet_providers.dart';
+import '../../wallet/screens/wallet_currency_selection_screen.dart';
 
 /// Provider for user profile data on Home dashboard
 final homeUserProfileProvider = FutureProvider((ref) async {
@@ -419,44 +420,6 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
                         // YOUR ACTIVITY Section
                         _buildActivitySection(context),
-                        const SizedBox(height: 24),
-
-                        // Session Logout Button per test expectations
-                        Center(
-                          child: TextButton.icon(
-                            key: const Key('home_logout_button'),
-                            onPressed: () async {
-                              HapticFeedback.lightImpact();
-                              await ref.read(authRepositoryProvider).logout();
-                              ref.read(currentTravelProfileProvider.notifier).clear();
-                              if (context.mounted) {
-                                context.go(AppRoutes.login);
-                              }
-                            },
-                            icon: const Icon(
-                              Icons.logout_rounded,
-                              size: 15,
-                              color: AppColors.muted,
-                            ),
-                            label: const Text(
-                              'Log Out (Return to Login)',
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.muted,
-                              ),
-                            ),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(100),
-                              ),
-                            ),
-                          ),
-                        ),
                         const SizedBox(height: 100),
                       ],
                     ),
@@ -641,12 +604,12 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
           // Savings Account / Travel Wallet Card
           balancesAsync.when(
             data: (balances) {
+              // Only ever show a balance actually held in the active currency:
+              // the card labels this amount with that currency's symbol.
               final primaryBalance = balances.firstWhere(
                 (b) => b.currency.toUpperCase() == walletCurrency.code,
-                orElse: () => balances.isNotEmpty
-                    ? balances.first
-                    : WalletBalanceModel(
-                        currency: walletCurrency.code, balance: 500.0),
+                orElse: () => WalletBalanceModel(
+                    currency: walletCurrency.code, balance: 0.0),
               );
 
               final walletAmount = primaryBalance.balance;
@@ -665,18 +628,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               );
             },
             loading: () => _buildSavingsCardSkeleton(),
-            error: (error, stack) {
-              final currencySymbol = flagEmoji.contains('🇳🇬') ? '₦' : 'GH₵';
-              return _buildSavingsAccountCard(
-                context: context,
-                walletCurrency: walletCurrency,
-                walletAmount: 500.0,
-                ghsAmount: 500.0 * ghsRate,
-                rate: ghsRate,
-                flagEmoji: flagEmoji,
-                currencySymbol: currencySymbol,
-              );
-            },
+            error: (error, stack) => _buildSavingsCardError(),
           ),
         ],
       ),
@@ -697,7 +649,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
       color: Colors.transparent,
       child: InkWell(
         key: const Key('home_wallet_card'),
-        onTap: () => context.push(AppRoutes.wallet),
+        onTap: null,
         borderRadius: BorderRadius.circular(24),
         child: Container(
           decoration: BoxDecoration(
@@ -726,7 +678,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Top Row: Travel Wallet tag & Settings Gear
+              // Top Row: Travel Wallet tag & balance visibility toggle
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -749,17 +701,6 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         color: Colors.white,
                       ),
                     ),
-                  ),
-                  IconButton(
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    icon: const Icon(
-                      Icons.settings_outlined,
-                      size: 20,
-                      color: Colors.white60,
-                    ),
-                    onPressed: () => context.push(AppRoutes.wallet),
-                    tooltip: 'Wallet Settings',
                   ),
                 ],
               ),
@@ -810,60 +751,110 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   ),
                 ],
               ),
+              // Money left behind in a previously chosen wallet currency
+              _buildSecondaryBalancesLine(),
+
               const SizedBox(height: 14),
 
-              // Secondary Destination Currency Equivalent Container (Tap for live rates)
-              InkWell(
-                key: const Key('wallet_live_rates_button'),
-                onTap: () => _showRatesBottomSheet(context, rate, walletCurrency),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceDarkElevated,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppColors.hairlineSoft.withValues(alpha: 0.1),
-                      width: 1.0,
-                    ),
-                  ),
-                child: Row(
-                  children: [
-                    Text(flagEmoji, style: const TextStyle(fontSize: 16)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _hideBalance
-                                ? '≈ $currencySymbol ••••••••'
-                                : '≈ $currencySymbol ${ghsAmount.toStringAsFixed(2)}',
-                            key: const Key('wallet_ghs_equivalent_text'),
-                            style: GoogleFonts.jetBrainsMono(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.onDark,
-                            ),
+              // Secondary Destination Currency Equivalent & Change Currency Action Row
+              Row(
+                children: [
+                  // Exchange reference box (reduced width via Expanded)
+                  Expanded(
+                    child: InkWell(
+                      key: const Key('wallet_live_rates_button'),
+                      onTap: () =>
+                          _showRatesBottomSheet(context, rate, walletCurrency),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceDarkElevated,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppColors.hairlineSoft.withValues(alpha: 0.1),
+                            width: 1.0,
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Exchange reference: ${walletCurrency.format(1)} = $currencySymbol${rate.toStringAsFixed(2)}',
-                            style: GoogleFonts.jetBrainsMono(
-                              fontSize: 11,
-                              color: AppColors.onDarkSoft,
+                        ),
+                        child: Row(
+                          children: [
+                            Text(flagEmoji, style: const TextStyle(fontSize: 16)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _hideBalance
+                                        ? '≈ $currencySymbol ••••••••'
+                                        : '≈ $currencySymbol ${ghsAmount.toStringAsFixed(2)}',
+                                    key: const Key('wallet_ghs_equivalent_text'),
+                                    style: GoogleFonts.jetBrainsMono(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.onDark,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Exchange reference: ${walletCurrency.format(1)} = $currencySymbol${rate.toStringAsFixed(2)}',
+                                    style: GoogleFonts.jetBrainsMono(
+                                      fontSize: 11,
+                                      color: AppColors.onDarkSoft,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
+                  ),
 
+                  const SizedBox(width: 10),
+
+                  // Change Primary currency icon button next to the exchange reference box
+                  Tooltip(
+                    key: const Key('wallet_change_primary_currency_button'),
+                    message: 'Change Primary currency',
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        key: const Key('change_primary_currency_button'),
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          WalletCurrencySelectionScreen.showAsBottomSheet(
+                              context);
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceDarkElevated,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color:
+                                  AppColors.hairlineSoft.withValues(alpha: 0.1),
+                              width: 1.0,
+                            ),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.currency_exchange_rounded,
+                              size: 20,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 20),
 
               // Action Buttons (Pill geometry)
@@ -929,6 +920,114 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Balances held in currencies the user no longer has as primary.
+  ///
+  /// Changing wallet currency does not convert anything, so without this the
+  /// old money would simply disappear from the app.
+  Widget _buildSecondaryBalancesLine() {
+    final secondary = ref.watch(secondaryWalletBalancesProvider);
+    if (secondary.isEmpty) return const SizedBox.shrink();
+
+    final catalog = ref.watch(supportedWalletCurrenciesProvider).valueOrNull ??
+        kDefaultWalletCurrencies;
+    final formatted = secondary
+        .map((b) => resolveWalletCurrency(b.currency, catalog: catalog)
+            .format(b.balance))
+        .join(' · ');
+
+    return Padding(
+      key: const Key('home_secondary_balances'),
+      padding: const EdgeInsets.only(top: 10),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.account_balance_wallet_outlined,
+            size: 14,
+            color: Colors.white60,
+          ),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              _hideBalance
+                  ? 'You also hold ••••••••'
+                  : 'You also hold $formatted',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.white60,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Shown when the balance could not be fetched. Deliberately shows no
+  /// number: an invented balance is worse than an honest failure.
+  Widget _buildSavingsCardError() {
+    return Container(
+      key: const Key('wallet_balance_error_card'),
+      height: 180,
+      decoration: BoxDecoration(
+        color: const Color(0xFF0E1117),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: const Color(0xFF282D37),
+          width: 1.0,
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.cloud_off_rounded,
+              size: 24,
+              color: Colors.white60,
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Balance unavailable',
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'We could not reach your wallet just now.',
+              style: TextStyle(fontSize: 12, color: Colors.white60),
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              key: const Key('wallet_balance_retry_button'),
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                ref.invalidate(walletBalancesProvider);
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: Colors.white.withValues(alpha: 0.12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(100),
+                ),
+              ),
+              child: const Text(
+                'Try Again',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1008,7 +1107,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               ),
             ],
           ),
-          child: Column(
+          child: activities.isEmpty
+              ? _buildEmptyActivityState()
+              : Column(
             children: [
               for (int i = 0; i < activities.length; i++) ...[
                 if (i > 0)
@@ -1034,6 +1135,51 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
+  /// Empty state shown when the user has no transactions yet
+  Widget _buildEmptyActivityState() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 28),
+      child: Column(
+        key: const Key('activity_empty_state'),
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: const BoxDecoration(
+              color: AppColors.surfaceTint,
+              shape: BoxShape.circle,
+            ),
+            child: const Center(
+              child: Icon(
+                Icons.receipt_long_rounded,
+                color: AppColors.muted,
+                size: 22,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'No activities yet',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.ink,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Your transactions will appear here once you add money or make a payment.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.muted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildActivityRow({
     required String id,
     required IconData icon,
@@ -1048,13 +1194,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     required BuildContext context,
   }) {
     return InkWell(
-      onTap: () {
-        if (!id.startsWith('default-')) {
-          context.push(AppRoutes.transactionDetail, extra: id);
-        } else {
-          context.push(AppRoutes.transactionList);
-        }
-      },
+      onTap: () => context.push(AppRoutes.transactionDetail, extra: id),
       borderRadius: BorderRadius.circular(16),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),

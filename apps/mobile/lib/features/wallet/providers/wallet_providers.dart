@@ -47,11 +47,29 @@ final primaryWalletBalanceProvider =
   final activeCurrency = ref.watch(activeWalletCurrencyCodeProvider);
   return balancesAsync.whenData((balances) {
     if (balances.isEmpty) return null;
+    // Never fall back to another currency's wallet: the UI labels this amount
+    // with the active currency, so a foreign balance would be mislabelled.
+    // A user who has just switched simply holds nothing in the new currency yet.
     return balances.firstWhere(
       (b) => b.currency.toUpperCase() == activeCurrency,
-      orElse: () => balances.first,
+      orElse: () => WalletBalanceModel(currency: activeCurrency, balance: 0.0),
     );
   });
+});
+
+/// Balances still held in currencies other than the active one.
+///
+/// Switching wallet currency never converts anything: the old wallet keeps its
+/// money. These are surfaced so that balance stays visible instead of silently
+/// dropping out of the UI.
+final secondaryWalletBalancesProvider =
+    Provider<List<WalletBalanceModel>>((ref) {
+  final balances = ref.watch(walletBalancesProvider).valueOrNull ??
+      const <WalletBalanceModel>[];
+  final active = ref.watch(activeWalletCurrencyCodeProvider);
+  return balances
+      .where((b) => b.currency.toUpperCase() != active && b.balance > 0)
+      .toList();
 });
 
 enum TopupStep {

@@ -53,6 +53,7 @@ model Wallet {
   currency       String   @default("USD")
   balance        Decimal  @default(0.00) @db.Decimal(14, 2)
   wewireWalletId String?  @map("wewire_wallet_id")
+  wewireAccountId String? @map("wewire_account_id")
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 

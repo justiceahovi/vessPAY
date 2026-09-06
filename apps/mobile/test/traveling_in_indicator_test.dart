@@ -13,6 +13,10 @@ import 'package:vesspay/features/travel/models/travel_profile_model.dart';
 import 'package:vesspay/features/travel/providers/travel_providers.dart';
 import 'package:vesspay/features/travel/repositories/travel_repository.dart';
 import 'package:vesspay/features/travel/widgets/traveling_in_indicator.dart';
+import 'package:vesspay/features/wallet/models/topup_model.dart';
+import 'package:vesspay/features/wallet/models/wallet_balance_model.dart';
+import 'package:vesspay/features/wallet/models/wallet_currency_model.dart';
+import 'package:vesspay/features/wallet/repositories/wallet_repository.dart';
 
 class MockTravelRepository implements TravelRepository {
   TravelProfileModel? profile;
@@ -48,6 +52,38 @@ class MockTravelRepository implements TravelRepository {
     profile = updated;
     return updated;
   }
+}
+
+/// The Home balance card only renders its local-currency reference line when
+/// balances resolve, so the corridor assertions need a working wallet source.
+class MockWalletRepositoryForIndicator implements WalletRepository {
+  @override
+  Future<List<WalletBalanceModel>> getBalances() async => const [
+        WalletBalanceModel(currency: 'USD', balance: 500.0),
+      ];
+
+  @override
+  Future<List<WalletCurrencyModel>> getSupportedCurrencies() async =>
+      kDefaultWalletCurrencies;
+
+  @override
+  Future<String> setPrimaryCurrency(String currencyCode) async =>
+      currencyCode.toUpperCase();
+
+  @override
+  Future<TopupResponseModel> initiateTopup({
+    required double amount,
+    String currency = 'USD',
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<TopupResponseModel> getTopupStatus(String fundingTransactionId) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<TopupResponseModel> confirmTopup(String fundingTransactionId) async =>
+      throw UnimplementedError();
 }
 
 void main() {
@@ -204,6 +240,8 @@ void main() {
           overrides: [
             tokenStorageProvider.overrideWithValue(storage),
             travelRepositoryProvider.overrideWithValue(mockRepo),
+            walletRepositoryProvider
+                .overrideWithValue(MockWalletRepositoryForIndicator()),
             routerProvider.overrideWithValue(router),
           ],
           child: MaterialApp.router(

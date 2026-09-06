@@ -11,6 +11,7 @@ import 'package:vesspay/features/wallet/models/topup_model.dart';
 import 'package:vesspay/features/wallet/models/wallet_balance_model.dart';
 import 'package:vesspay/features/wallet/models/wallet_currency_model.dart';
 import 'package:vesspay/features/wallet/providers/currency_providers.dart';
+import 'package:vesspay/features/wallet/providers/wallet_providers.dart';
 import 'package:vesspay/features/wallet/repositories/wallet_repository.dart';
 
 class FakeWalletRepository implements WalletRepository {
@@ -18,10 +19,12 @@ class FakeWalletRepository implements WalletRepository {
   int setCurrencyCalls = 0;
   bool failOnSet = false;
 
+  List<WalletBalanceModel> balances = const [
+    WalletBalanceModel(currency: 'USD', balance: 0.0),
+  ];
+
   @override
-  Future<List<WalletBalanceModel>> getBalances() async => const [
-        WalletBalanceModel(currency: 'USD', balance: 0.0),
-      ];
+  Future<List<WalletBalanceModel>> getBalances() async => balances;
 
   @override
   Future<List<WalletCurrencyModel>> getSupportedCurrencies() async =>
@@ -259,6 +262,62 @@ void main() {
       expect(resolveWalletCurrency('GBP').format(12.5), '£12.50');
       expect(resolveWalletCurrency('EUR').format(12.5), '€12.50');
       expect(resolveWalletCurrency('USD').format(12.5), r'$12.50');
+    });
+  });
+
+  group('Balance shown after a currency switch', () {
+    test('shows zero in the newly chosen currency, not the old wallet balance',
+        () async {
+      final wallet = FakeWalletRepository()
+        ..balances = const [WalletBalanceModel(currency: 'USD', balance: 500.0)];
+      final container = _container(
+        wallet: wallet,
+        auth: FakeAuthRepository(profileCurrency: 'USD'),
+        storage: InMemoryCurrencyPreferenceStorage(initialCurrency: 'USD'),
+      );
+      addTearDown(container.dispose);
+
+      await container.read(walletBalancesProvider.future);
+      expect(
+        container.read(primaryWalletBalanceProvider).valueOrNull?.balance,
+        equals(500.0),
+      );
+
+      // Switching to a currency the user holds nothing in: the backend creates
+      // an empty EUR wallet and the USD balance is left untouched.
+      await container.read(walletCurrencyProvider.notifier).select('EUR');
+      await container.read(walletBalancesProvider.future);
+
+      final shown = container.read(primaryWalletBalanceProvider).valueOrNull;
+      expect(shown?.currency, equals('EUR'));
+      expect(shown?.balance, equals(0.0));
+    });
+
+    test('a switch that fails server-side still never mislabels the old balance',
+        () async {
+      final wallet = FakeWalletRepository()
+        ..balances = const [WalletBalanceModel(currency: 'USD', balance: 500.0)]
+        ..failOnSet = true;
+      final container = _container(
+        wallet: wallet,
+        auth: FakeAuthRepository(profileCurrency: 'USD'),
+        storage: InMemoryCurrencyPreferenceStorage(initialCurrency: 'USD'),
+      );
+      addTearDown(container.dispose);
+
+      await container.read(walletBalancesProvider.future);
+
+      await expectLater(
+        container.read(walletCurrencyProvider.notifier).select('EUR'),
+        throwsA(isA<Exception>()),
+      );
+
+      // The choice is kept locally so the app stays usable offline, but the
+      // USD balance must not be re-rendered under the EUR symbol.
+      expect(container.read(activeWalletCurrencyCodeProvider), equals('EUR'));
+      final shown = container.read(primaryWalletBalanceProvider).valueOrNull;
+      expect(shown?.currency, equals('EUR'));
+      expect(shown?.balance, equals(0.0));
     });
   });
 }

@@ -51,14 +51,18 @@ class TestMockAuthRepository implements AuthRepository {
 
 class TestMockWalletRepository implements WalletRepository {
   final List<WalletBalanceModel> balances;
-  TestMockWalletRepository({List<WalletBalanceModel>? balances})
+  final bool failOnBalances;
+  TestMockWalletRepository({List<WalletBalanceModel>? balances, this.failOnBalances = false})
       : balances = balances ??
             [
               const WalletBalanceModel(currency: 'USD', balance: 500.00),
             ];
 
   @override
-  Future<List<WalletBalanceModel>> getBalances() async => balances;
+  Future<List<WalletBalanceModel>> getBalances() async {
+    if (failOnBalances) throw Exception('balances unavailable');
+    return balances;
+  }
 
   @override
   Future<List<WalletCurrencyModel>> getSupportedCurrencies() async =>
@@ -198,41 +202,70 @@ void main() {
       );
     });
 
-    testWidgets('Renders YOUR ACTIVITY feed with amounts and SUCCESS badges',
+    testWidgets('Surfaces a balance left behind in a non-primary currency',
+        (WidgetTester tester) async {
+      // Primary wallet is USD; a EUR balance is left over from an earlier choice.
+      walletRepo = TestMockWalletRepository(balances: [
+        const WalletBalanceModel(currency: 'USD', balance: 500.0),
+        const WalletBalanceModel(currency: 'EUR', balance: 42.0),
+      ]);
+      await tester.pumpWidget(createTestHomeWidget());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('home_secondary_balances')), findsOneWidget);
+      expect(find.textContaining('You also hold'), findsOneWidget);
+      expect(find.textContaining('€42.00'), findsOneWidget);
+    });
+
+    testWidgets('Hides the secondary balance line when only the primary wallet is funded',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(createTestHomeWidget());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('home_secondary_balances')), findsNothing);
+      expect(find.textContaining('You also hold'), findsNothing);
+    });
+
+    testWidgets('Shows an error card rather than an invented balance when the fetch fails',
+        (WidgetTester tester) async {
+      walletRepo = TestMockWalletRepository(failOnBalances: true);
+      await tester.pumpWidget(createTestHomeWidget());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('wallet_balance_error_card')), findsOneWidget);
+      expect(find.text('Balance unavailable'), findsOneWidget);
+      expect(find.byKey(const Key('wallet_balance_retry_button')), findsOneWidget);
+
+      // No fabricated figure anywhere on the card
+      expect(find.textContaining('500'), findsNothing);
+    });
+
+    testWidgets('Renders YOUR ACTIVITY empty state when there are no transactions',
         (WidgetTester tester) async {
       await tester.pumpWidget(createTestHomeWidget());
       await tester.pumpAndSettle();
 
       expect(find.text('YOUR ACTIVITY'), findsOneWidget);
-      expect(find.text('Purchased airtime'), findsOneWidget);
-      expect(find.text('You have successfully purchased airtime of GHS 10.00'),
-          findsOneWidget);
-      expect(find.text('GHS 10.00'), findsOneWidget);
-      expect(find.text('Load a Virtual Card'), findsOneWidget);
-      expect(find.text('GHS 51.00'), findsOneWidget);
-      expect(find.text('Transfer to Kwame Mensah'), findsOneWidget);
-      expect(find.text('GHS 150.00'), findsOneWidget);
-      expect(find.text('SUCCESS'), findsNWidgets(3));
+      expect(find.byKey(const Key('activity_empty_state')), findsOneWidget);
+      expect(find.text('No activities yet'), findsOneWidget);
+      expect(find.text('Purchased airtime'), findsNothing);
+      expect(find.text('Load a Virtual Card'), findsNothing);
+      expect(find.text('Transfer to Kwame Mensah'), findsNothing);
+      expect(find.text('SUCCESS'), findsNothing);
     });
 
-    testWidgets('Renders 3-item Floating Bottom Navigation Bar: Home, Pay, Cards and header actions',
+    testWidgets('Renders 3-item Floating Bottom Navigation Bar: Profile, Home, Transactions and header actions',
         (WidgetTester tester) async {
       await tester.pumpWidget(createTestHomeWidget());
       await tester.pumpAndSettle();
 
-      // Verify 3 floating navigation items
+      // Verify 3 floating navigation items, Home in the centre
+      expect(find.text('Profile'), findsOneWidget);
       expect(find.text('Home'), findsOneWidget);
-      expect(
-        find.descendant(
-          of: find.byKey(const Key('nav_item_pay')),
-          matching: find.text('Pay'),
-        ),
-        findsOneWidget,
-      );
-      expect(find.text('Cards'), findsOneWidget);
+      expect(find.text('Transactions'), findsOneWidget);
+      expect(find.byKey(const Key('nav_item_profile')), findsOneWidget);
       expect(find.byKey(const Key('nav_item_home')), findsOneWidget);
-      expect(find.byKey(const Key('nav_item_pay')), findsOneWidget);
-      expect(find.byKey(const Key('nav_item_cards')), findsOneWidget);
+      expect(find.byKey(const Key('nav_item_transactions')), findsOneWidget);
 
       // Tap Help icon in header opens help bottom sheet
       final helpBtn = find.byKey(const Key('header_help_button'));
@@ -252,7 +285,8 @@ void main() {
       await tester.tap(notifBtn);
       await tester.pumpAndSettle();
       expect(find.text('Notifications'), findsOneWidget);
-      expect(find.text('Airtime Purchase Succeeded'), findsOneWidget);
+      expect(find.text('Travel Corridor Active'), findsOneWidget);
+      expect(find.text('Airtime Purchase Succeeded'), findsNothing);
 
       // Close sheet
       await tester.tap(find.byIcon(Icons.close));
@@ -264,6 +298,31 @@ void main() {
       expect(find.byKey(const Key('profile_screen')), findsOneWidget);
       expect(find.text('Profile & Account'), findsOneWidget);
       expect(find.text('Travel Corridor Setup'), findsOneWidget);
+    });
+
+    testWidgets('Renders Change Primary currency button next to exchange reference and opens currency bottom sheet',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(createTestHomeWidget());
+      await tester.pumpAndSettle();
+
+      // Verify exchange reference text is displayed
+      expect(find.textContaining('Exchange reference:'), findsOneWidget);
+
+      // Verify Change Primary currency icon button
+      final changeBtn = find.byKey(const Key('change_primary_currency_button'));
+      expect(changeBtn, findsOneWidget);
+      expect(find.byIcon(Icons.currency_exchange_rounded), findsOneWidget);
+
+      // Tap Change Primary currency button to open currency selection sheet
+      await tester.tap(changeBtn);
+      await tester.pumpAndSettle();
+
+      // Verify currency selection bottom sheet is opened
+      expect(find.byKey(const Key('wallet_currency_selection_screen')), findsOneWidget);
+      expect(find.text('What currency do you want your wallet in?'), findsOneWidget);
+      expect(find.byKey(const Key('wallet_currency_card_usd')), findsOneWidget);
+      expect(find.byKey(const Key('wallet_currency_card_gbp')), findsOneWidget);
+      expect(find.byKey(const Key('wallet_currency_card_eur')), findsOneWidget);
     });
   });
 }

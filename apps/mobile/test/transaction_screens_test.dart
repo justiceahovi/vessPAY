@@ -445,7 +445,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Transactions'), findsOneWidget);
+      expect(find.byKey(const Key('transactions_screen_title')), findsOneWidget);
 
       router.push(AppRoutes.transactionDetail, extra: sampleTxToday);
       await tester.pumpAndSettle();

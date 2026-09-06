@@ -215,37 +215,37 @@ void main() {
 
       expect(find.byType(MainAppShell), findsOneWidget);
       expect(find.byType(FloatingBottomNavBar), findsOneWidget);
+      expect(find.byKey(const Key('nav_item_profile')), findsOneWidget);
       expect(find.byKey(const Key('nav_item_home')), findsOneWidget);
-      expect(find.byKey(const Key('nav_item_pay')), findsOneWidget);
-      expect(find.byKey(const Key('nav_item_cards')), findsOneWidget);
+      expect(find.byKey(const Key('nav_item_transactions')), findsOneWidget);
 
-      // Home icon is highlighted with primary color
+      // Home icon is highlighted on blue background with onPrimary color
       final homeIcon = tester.widget<Icon>(
         find.descendant(
           of: find.byKey(const Key('nav_item_home')),
           matching: find.byType(Icon),
         ),
       );
-      expect(homeIcon.color, equals(AppColors.primary));
+      expect(homeIcon.color, equals(AppColors.onPrimary));
     });
 
-    testWidgets('Persists on Wallet screen and shows Cards as active',
+    testWidgets('Persists on Profile screen and shows Profile as active',
         (WidgetTester tester) async {
-      await tester.pumpWidget(createTestApp(initialLocation: AppRoutes.wallet));
+      await tester.pumpWidget(createTestApp(initialLocation: AppRoutes.profile));
       await tester.pumpAndSettle();
 
       expect(find.byType(MainAppShell), findsOneWidget);
       expect(find.byType(FloatingBottomNavBar), findsOneWidget);
-      expect(find.text('Travel Wallet'), findsOneWidget);
+      expect(find.byKey(const Key('profile_screen')), findsOneWidget);
 
-      // Cards tab is active
-      final cardsIcon = tester.widget<Icon>(
+      // Profile tab is active with onPrimary color
+      final profileIcon = tester.widget<Icon>(
         find.descendant(
-          of: find.byKey(const Key('nav_item_cards')),
+          of: find.byKey(const Key('nav_item_profile')),
           matching: find.byType(Icon),
         ),
       );
-      expect(cardsIcon.color, equals(AppColors.primary));
+      expect(profileIcon.color, equals(AppColors.onPrimary));
     });
 
     testWidgets('Persists on Pay Anyone flow screen and shows Pay as active',
@@ -267,7 +267,16 @@ void main() {
 
       expect(find.byType(MainAppShell), findsOneWidget);
       expect(find.byType(FloatingBottomNavBar), findsOneWidget);
-      expect(find.text('Transactions'), findsOneWidget);
+      expect(find.byKey(const Key('transactions_screen_title')), findsOneWidget);
+
+      // Transactions tab is active
+      final transactionsIcon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byKey(const Key('nav_item_transactions')),
+          matching: find.byType(Icon),
+        ),
+      );
+      expect(transactionsIcon.color, equals(AppColors.onPrimary));
     });
 
     testWidgets('Persists when navigating between screens via bottom nav bar tabs',
@@ -278,18 +287,18 @@ void main() {
       expect(find.text('VessPay Home'), findsOneWidget);
       expect(find.byType(FloatingBottomNavBar), findsOneWidget);
 
-      // 1. Tap Cards -> navigates to Wallet
-      await tester.tap(find.byKey(const Key('nav_item_cards')));
+      // 1. Tap Transactions -> navigates to the transaction list
+      await tester.tap(find.byKey(const Key('nav_item_transactions')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Travel Wallet'), findsOneWidget);
+      expect(find.byKey(const Key('transactions_screen_title')), findsOneWidget);
       expect(find.byType(FloatingBottomNavBar), findsOneWidget);
 
-      // 2. Tap Pay -> navigates to Pay Anyone flow
-      await tester.tap(find.byKey(const Key('nav_item_pay')));
+      // 2. Tap Profile -> navigates to Profile & Account
+      await tester.tap(find.byKey(const Key('nav_item_profile')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Pay Anyone'), findsOneWidget);
+      expect(find.byKey(const Key('profile_screen')), findsOneWidget);
       expect(find.byType(FloatingBottomNavBar), findsOneWidget);
 
       // 3. Tap Home -> navigates back to Home

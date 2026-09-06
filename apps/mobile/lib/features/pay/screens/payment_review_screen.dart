@@ -174,7 +174,7 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
           if (Navigator.of(context).canPop()) {
             context.pop();
           } else {
-            context.go(AppRoutes.wallet);
+            context.go(AppRoutes.home);
           }
         },
       ),

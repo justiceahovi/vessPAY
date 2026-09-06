@@ -101,6 +101,63 @@ void main() {
       expect(find.text('Check Verification Status'), findsOneWidget);
     });
 
+    testWidgets('An approved user without EDD is prompted for enhanced verification',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            kycRepositoryProvider.overrideWithValue(
+              MockKycRepository(
+                status: KycStatusModel(
+                  onboardingStatus: 'APPROVED',
+                  enhancedKycStatus: 'NOT_STARTED',
+                ),
+                link: KycLinkModel(
+                  url: 'https://in.sumsub.com/websdk/p/sbx_edd',
+                  stage: 'ENHANCED_KYC',
+                ),
+              ),
+            ),
+          ],
+          child: const MaterialApp(home: KycScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Start Enhanced Verification'), findsOneWidget);
+      expect(find.text('Launch Verification Portal'), findsNothing);
+      expect(find.textContaining('enhanced verification still needed for deposits'),
+          findsOneWidget);
+      expect(find.byKey(const Key('kyc_tier_label')), findsOneWidget);
+      expect(find.text('Tier 1'), findsOneWidget);
+    });
+
+    testWidgets('A fully verified user is not prompted for enhanced verification',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            kycRepositoryProvider.overrideWithValue(
+              MockKycRepository(
+                status: KycStatusModel(
+                  onboardingStatus: 'APPROVED',
+                  enhancedKycStatus: 'TIER_2',
+                ),
+              ),
+            ),
+          ],
+          child: const MaterialApp(home: KycScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Start Enhanced Verification'), findsNothing);
+      expect(find.text('Launch Verification Portal'), findsOneWidget);
+      expect(find.text('Identity verified. Payouts and deposits active.'),
+          findsOneWidget);
+      expect(find.text('Tier 2'), findsOneWidget);
+    });
+
     testWidgets('Tapping refresh button requests updated KYC status', (tester) async {
       final mockRepo = MockKycRepository();
 
@@ -145,7 +202,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Open More Options from profile avatar
-      await tester.tap(find.byIcon(Icons.person_outline_rounded));
+      await tester.tap(find.byKey(const Key('home_avatar_button')));
       await tester.pumpAndSettle();
 
       final kycCard = find.byKey(const Key('home_kyc_card'));
@@ -185,8 +242,15 @@ void main() {
         find.textContaining('before you can add money to your wallet'),
         findsOneWidget,
       );
-      // The deposit form itself is not reachable
-      expect(find.byKey(const Key('add_money_amount_input')), findsNothing);
+      // The sheet sits over the flow, and the form behind it is inert
+      expect(find.byKey(const Key('kyc_gate_scrim')), findsOneWidget);
+      expect(
+        find.ancestor(
+          of: find.byKey(const Key('add_money_amount_input')),
+          matching: find.byType(IgnorePointer),
+        ),
+        findsWidgets,
+      );
     });
 
     testWidgets('A verified user goes straight to the deposit form',

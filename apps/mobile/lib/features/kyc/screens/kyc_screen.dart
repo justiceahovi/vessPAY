@@ -161,11 +161,13 @@ class _KycScreenState extends ConsumerState<KycScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Center(
+                Center(
                   child: Text(
-                    'Complete your automated identity verification via WeWire’s licensed compliance portal before sending payouts.',
+                    _needsEnhanced(statusAsync)
+                        ? 'Your identity is verified. Enhanced verification is the second step WeWire requires before a deposit account can be issued to you.'
+                        : 'Complete your automated identity verification via WeWire’s licensed compliance portal before sending payouts.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontFamily: 'StyreneB',
                       fontSize: 14,
                       color: AppColors.muted,
@@ -270,11 +272,20 @@ class _KycScreenState extends ConsumerState<KycScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      _buildCheckItem('Government ID (Passport, National ID, or Driver\'s License)'),
-                      const SizedBox(height: 6),
-                      _buildCheckItem('Quick selfie / liveness check via browser camera'),
-                      const SizedBox(height: 6),
-                      _buildCheckItem('Takes under 2 minutes with automated review'),
+                      if (_needsEnhanced(statusAsync)) ...[
+                        _buildCheckItem('Government ID and proof of address'),
+                        const SizedBox(height: 6),
+                        _buildCheckItem('Source of funds and occupation details'),
+                        const SizedBox(height: 6),
+                        _buildCheckItem(
+                            'Unlocks a deposit account so you can add money'),
+                      ] else ...[
+                        _buildCheckItem('Government ID (Passport, National ID, or Driver\'s License)'),
+                        const SizedBox(height: 6),
+                        _buildCheckItem('Quick selfie / liveness check via browser camera'),
+                        const SizedBox(height: 6),
+                        _buildCheckItem('Takes under 2 minutes with automated review'),
+                      ],
                     ],
                   ),
                 ),
@@ -306,11 +317,13 @@ class _KycScreenState extends ConsumerState<KycScreen> {
                               color: AppColors.onPrimary,
                             ),
                           )
-                        : const Row(
+                        : Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                'Launch Verification Portal',
+                                _needsEnhanced(statusAsync)
+                                    ? 'Start Enhanced Verification'
+                                    : 'Launch Verification Portal',
                                 style: TextStyle(
                                   fontFamily: 'StyreneB',
                                   fontSize: 15,
@@ -423,6 +436,17 @@ class _KycScreenState extends ConsumerState<KycScreen> {
     );
   }
 
+  /// True once basic onboarding is approved but WeWire still wants Enhanced Due
+  /// Diligence. This is the state that blocks account issuance — and therefore
+  /// real deposits — with SUBCUSTOMER_ENHANCED_KYC_REQUIRED.
+  bool _needsEnhanced(AsyncValue<KycStatusModel> statusAsync) {
+    final status = statusAsync.valueOrNull;
+    if (status == null) return false;
+    return status.isApproved &&
+        !status.isEnhancedApproved &&
+        !status.isEnhancedInReview;
+  }
+
   /// The demo shortcut only appears when the backend advertises it and there is
   /// still something to verify.
   bool _showDemoKycButton(AsyncValue<KycStatusModel> statusAsync) {
@@ -507,7 +531,11 @@ class _KycScreenState extends ConsumerState<KycScreen> {
                 const SizedBox(height: 4),
                 Text(
                   isVerified
-                      ? 'Identity verified. All African payout corridors active.'
+                      ? (status.isEnhancedApproved
+                          ? 'Identity verified. Payouts and deposits active.'
+                          : status.isEnhancedInReview
+                              ? 'Identity verified. Enhanced verification in review.'
+                              : 'Identity verified. Payout corridors active — enhanced verification still needed for deposits.')
                       : isInReview
                           ? 'Verification in review. You will be notified shortly.'
                           : isRejected
@@ -519,6 +547,31 @@ class _KycScreenState extends ConsumerState<KycScreen> {
                     fontWeight: FontWeight.w500,
                     color: AppColors.ink,
                   ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  key: const Key('kyc_tier_row'),
+                  children: [
+                    const Text(
+                      'Verification tier',
+                      style: TextStyle(
+                        fontFamily: 'StyreneB',
+                        fontSize: 12,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      status.tierLabel,
+                      key: const Key('kyc_tier_label'),
+                      style: const TextStyle(
+                        fontFamily: 'StyreneB',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

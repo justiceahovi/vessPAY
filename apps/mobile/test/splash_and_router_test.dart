@@ -124,7 +124,7 @@ void main() {
       expect(find.byType(HomePlaceholderScreen), findsOneWidget);
       expect(find.byKey(const Key('home_screen')), findsOneWidget);
       expect(find.text('VessPay Home'), findsOneWidget);
-      expect(find.text('Log Out (Return to Login)'), findsOneWidget);
+      expect(find.text('Log Out (Return to Login)'), findsNothing);
     });
 
     testWidgets(

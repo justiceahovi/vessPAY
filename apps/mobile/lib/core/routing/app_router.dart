@@ -6,7 +6,6 @@ import '../../features/auth/screens/signup_screen.dart';
 import '../../features/kyc/screens/kyc_screen.dart';
 import '../../features/wallet/screens/add_money_screen.dart';
 import '../../features/wallet/screens/wallet_currency_selection_screen.dart';
-import '../../features/wallet/screens/wallet_screen.dart';
 import '../../features/pay/models/transaction_model.dart';
 import '../../features/pay/screens/pay_anyone_flow_screen.dart';
 import '../../features/pay/screens/payment_review_screen.dart';
@@ -88,11 +87,6 @@ GoRouter createAppRouter({
             path: AppRoutes.kycVerification,
             name: 'kyc-verification',
             builder: (context, state) => const KycScreen(),
-          ),
-          GoRoute(
-            path: AppRoutes.wallet,
-            name: 'wallet',
-            builder: (context, state) => const WalletScreen(),
           ),
           GoRoute(
             path: AppRoutes.addMoney,
