@@ -1,0 +1,948 @@
+import {
+  getWeWireInstitutions,
+  normalizeBankAccountNumber,
+  resolveInstitution,
+  type PayoutChannel,
+} from './wewire-institutions';
+export {
+  getWeWireInstitutions,
+  resolveInstitution,
+  normalizeBankAccountNumber,
+  GHANA_INSTITUTIONS,
+} from './wewire-institutions';
+export type { PayoutChannel, WeWireInstitution, ResolvedInstitution } from './wewire-institutions';
+
+import dotenv from 'dotenv';
+dotenv.config();
+
+export interface CreateSubCustomerParams {
+  firstName: string;
+  lastName: string;
+  email: string;
+  country?: string | null;
+  referenceId?: string;
+}
+
+export interface WeWireSubCustomerResponse {
+  id: string;
+  readableId?: string;
+  name: string;
+  email: string;
+  country: string;
+  status: string;
+  type: string;
+  purpose: string[];
+  onboardingStatus: string;
+  enhancedKycStatus: string;
+}
+
+/**
+ * Normalizes input country or nationality string to ISO 3166-1 alpha-3 code.
+ * WeWire strictly requires a 3-letter ISO code (e.g. GBR, USA, GHA, NGA).
+ */
+export function toAlpha3Country(countryInput?: string | null): string {
+  if (!countryInput || typeof countryInput !== 'string') return 'GBR';
+  const c = countryInput.trim().toUpperCase();
+
+  const map: Record<string, string> = {
+    // UK / Britain
+    GB: 'GBR',
+    GBR: 'GBR',
+    UK: 'GBR',
+    'UNITED KINGDOM': 'GBR',
+    BRITAIN: 'GBR',
+    BRITISH: 'GBR',
+    ENGLAND: 'GBR',
+    SCOTLAND: 'GBR',
+    WALES: 'GBR',
+
+    // USA
+    US: 'USA',
+    USA: 'USA',
+    'UNITED STATES': 'USA',
+    'UNITED STATES OF AMERICA': 'USA',
+    AMERICAN: 'USA',
+
+    // Ghana
+    GH: 'GHA',
+    GHA: 'GHA',
+    GHANA: 'GHA',
+    GHANAIAN: 'GHA',
+
+    // Nigeria
+    NG: 'NGA',
+    NGA: 'NGA',
+    NIGERIA: 'NGA',
+    NIGERIAN: 'NGA',
+
+    // Canada
+    CA: 'CAN',
+    CAN: 'CAN',
+    CANADA: 'CAN',
+    CANADIAN: 'CAN',
+
+    // Germany
+    DE: 'DEU',
+    DEU: 'DEU',
+    GERMANY: 'DEU',
+    GERMAN: 'DEU',
+
+    // France
+    FR: 'FRA',
+    FRA: 'FRA',
+    FRANCE: 'FRA',
+    FRENCH: 'FRA',
+
+    // South Africa
+    ZA: 'ZAF',
+    ZAF: 'ZAF',
+    'SOUTH AFRICA': 'ZAF',
+
+    // Kenya
+    KE: 'KEN',
+    KEN: 'KEN',
+    KENYA: 'KEN',
+  };
+
+  if (map[c]) return map[c];
+  if (/^[A-Z]{3}$/.test(c)) return c;
+  return 'GBR';
+}
+
+/**
+ * Provides demo/simplified address and phone metadata for a country.
+ * Used for hackathon demo KYC submissions.
+ */
+function getDemoKycMetadata(alpha3: string) {
+  switch (alpha3) {
+    case 'USA':
+      return {
+        addressLine1: '350 Fifth Avenue',
+        city: 'New York',
+        stateProvince: 'NY',
+        postalCode: '10118',
+        country: 'USA',
+        phoneNumber: '+12025550143',
+      };
+    case 'GHA':
+      return {
+        addressLine1: 'Liberation Road, Airport Residential Area',
+        city: 'Accra',
+        stateProvince: 'Greater Accra',
+        postalCode: 'GA-039-1234',
+        country: 'GHA',
+        phoneNumber: '+233241234567',
+      };
+    case 'NGA':
+      return {
+        addressLine1: '1 Adeola Odeku Street, Victoria Island',
+        city: 'Lagos',
+        stateProvince: 'Lagos',
+        postalCode: '101241',
+        country: 'NGA',
+        phoneNumber: '+2348031234567',
+      };
+    case 'CAN':
+      return {
+        addressLine1: '100 King Street West',
+        city: 'Toronto',
+        stateProvince: 'ON',
+        postalCode: 'M5X 1A9',
+        country: 'CAN',
+        phoneNumber: '+14165550123',
+      };
+    case 'GBR':
+    default:
+      return {
+        addressLine1: '10 Downing Street',
+        city: 'London',
+        stateProvince: 'London',
+        postalCode: 'SW1A 2AA',
+        country: 'GBR',
+        phoneNumber: '+447123456789',
+      };
+  }
+}
+
+/**
+ * Creates a WeWire sub-customer for an individual user per Section 8 & OpenAPI spec.
+ * Returns the created WeWire sub-customer record including its `id`.
+ */
+export async function createWeWireSubCustomer(
+  params: CreateSubCustomerParams
+): Promise<WeWireSubCustomerResponse> {
+  const apiKey = process.env.WEWIRE_API_KEY;
+  const baseUrl = (process.env.WEWIRE_BASE_URL || 'https://stage-capi.wewireafrica.com').replace(/\/$/, '');
+
+  if (!apiKey) {
+    console.warn('WEWIRE_API_KEY is not configured; using fallback subcustomer ID');
+    return {
+      id: `sub_stub_${Date.now()}`,
+      name: `${params.firstName} ${params.lastName}`,
+      email: params.email,
+      country: toAlpha3Country(params.country),
+      status: 'ACTIVE',
+      type: 'INDIVIDUAL',
+      purpose: ['PAYOUT', 'COLLECTION'],
+      onboardingStatus: 'DRAFT',
+      enhancedKycStatus: 'NOT_STARTED',
+    };
+  }
+
+  const alpha3Country = toAlpha3Country(params.country);
+  const endpoint = `${baseUrl}/v1/subcustomers`;
+
+  const payload = {
+    firstName: params.firstName.trim(),
+    lastName: params.lastName.trim(),
+    email: params.email.trim().toLowerCase(),
+    country: alpha3Country,
+    type: 'INDIVIDUAL',
+    purpose: ['PAYOUT', 'COLLECTION'],
+    referenceId: params.referenceId || undefined,
+  };
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'ww-api-key': apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await response.text();
+  let data: any;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = text;
+  }
+
+  if (!response.ok) {
+    const errMsg = typeof data === 'object' && data?.error?.message
+      ? data.error.message
+      : typeof data === 'object' && data?.message
+      ? data.message
+      : JSON.stringify(data);
+    throw new Error(`Failed to create WeWire sub-customer: ${errMsg} (Status: ${response.status})`);
+  }
+
+  return data as WeWireSubCustomerResponse;
+}
+
+/**
+ * Submits simplified/demo KYC for an individual sub-customer in the WeWire sandbox.
+ * Moves sub-customer onboardingStatus from DRAFT to IN_REVIEW.
+ */
+export async function submitSimplifiedKyc(
+  subCustomerId: string,
+  params: {
+    firstName: string;
+    lastName: string;
+    country?: string | null;
+  }
+): Promise<void> {
+  const apiKey = process.env.WEWIRE_API_KEY;
+  const baseUrl = (process.env.WEWIRE_BASE_URL || 'https://stage-capi.wewireafrica.com').replace(/\/$/, '');
+
+  if (!apiKey || subCustomerId.startsWith('sub_stub_')) {
+    return;
+  }
+
+  const alpha3 = toAlpha3Country(params.country);
+  const meta = getDemoKycMetadata(alpha3);
+  const endpoint = `${baseUrl}/v1/subcustomers/${subCustomerId}/kyc`;
+
+  const kycPayload = {
+    type: 'INDIVIDUAL',
+    data: {
+      firstName: params.firstName.trim(),
+      lastName: params.lastName.trim(),
+      gender: 'M',
+      dateOfBirth: '1990-01-01',
+      address: {
+        addressLine1: meta.addressLine1,
+        city: meta.city,
+        stateProvince: meta.stateProvince,
+        postalCode: meta.postalCode,
+        country: meta.country,
+      },
+      nationality: meta.country,
+      phoneNumber: meta.phoneNumber,
+      idType: 'PASSPORT',
+      // Standard 1x1 transparent PNG data URI for hackathon demo
+      idFileFront:
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      idIssuingCountry: meta.country,
+    },
+  };
+
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'ww-api-key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(kycPayload),
+    });
+
+    if (!res.ok) {
+      console.warn(`Simplified KYC submission returned non-200: ${res.status}`, await res.text());
+    }
+  } catch (err) {
+    console.warn('Non-blocking error during simplified KYC submission:', err);
+  }
+}
+
+/**
+ * Retrieves the hosted KYC verification URL from WeWire (SumSub WebSDK link).
+ * Endpoint: GET /v1/subcustomers/{subCustomerId}/kyc-link
+ */
+export async function getHostedKycLink(
+  subCustomerId: string
+): Promise<{ url: string; stage: string }> {
+  const apiKey = process.env.WEWIRE_API_KEY;
+  const baseUrl = (process.env.WEWIRE_BASE_URL || 'https://stage-capi.wewireafrica.com').replace(/\/$/, '');
+
+  if (!apiKey || subCustomerId.startsWith('sub_stub_')) {
+    return {
+      url: 'https://in.sumsub.com/websdk/p/sbx_demo_mock_url',
+      stage: 'ONBOARDING',
+    };
+  }
+
+  const endpoint = `${baseUrl}/v1/subcustomers/${subCustomerId}/kyc-link`;
+  const res = await fetch(endpoint, {
+    method: 'GET',
+    headers: {
+      'ww-api-key': apiKey,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const data: any = await res.json();
+  if (!res.ok) {
+    const errMsg = data?.error?.message || data?.message || JSON.stringify(data);
+    throw new Error(`Failed to retrieve hosted KYC link: ${errMsg}`);
+  }
+
+  return {
+    url: data.url,
+    stage: data.stage || 'ONBOARDING',
+  };
+}
+
+/**
+ * Retrieves the current sub-customer status from WeWire.
+ * Endpoint: GET /v1/subcustomers/{subCustomerId}
+ */
+export async function getSubCustomerStatus(
+  subCustomerId: string
+): Promise<{ onboardingStatus: string; enhancedKycStatus: string }> {
+  const apiKey = process.env.WEWIRE_API_KEY;
+  const baseUrl = (process.env.WEWIRE_BASE_URL || 'https://stage-capi.wewireafrica.com').replace(/\/$/, '');
+
+  if (!apiKey || subCustomerId.startsWith('sub_stub_')) {
+    return {
+      onboardingStatus: 'DRAFT',
+      enhancedKycStatus: 'NOT_STARTED',
+    };
+  }
+
+  const endpoint = `${baseUrl}/v1/subcustomers/${subCustomerId}`;
+  const res = await fetch(endpoint, {
+    method: 'GET',
+    headers: {
+      'ww-api-key': apiKey,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const data: any = await res.json();
+  if (!res.ok) {
+    const errMsg = data?.error?.message || data?.message || JSON.stringify(data);
+    throw new Error(`Failed to retrieve sub-customer status: ${errMsg}`);
+  }
+
+  return {
+    onboardingStatus: data.onboardingStatus || 'DRAFT',
+    enhancedKycStatus: data.enhancedKycStatus || 'NOT_STARTED',
+  };
+}
+
+export interface TopupInitiationResult {
+  checkoutId: string;
+  checkoutUrl: string;
+  accountDetails: {
+    bankName: string;
+    accountName: string;
+    accountNumber: string;
+    routingNumber: string;
+    currency: string;
+  };
+}
+
+/**
+ * Initiates funding workflow per WeWire rails (virtual account & hosted checkout fallback).
+ */
+export function initiateWeWireFunding(params: {
+  subCustomerId?: string | null;
+  userName: string;
+  userId: string;
+  amount: number;
+  currency: string;
+}): TopupInitiationResult {
+  const checkoutId = `chk_ww_${Date.now()}_${params.userId.replace(/-/g, '').slice(0, 8)}`;
+  const appBaseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3000}`).replace(/\/$/, '');
+  const checkoutUrl = `${appBaseUrl}/checkout/${checkoutId}?amount=${params.amount}&currency=${params.currency}`;
+
+  // Deterministic, clean demo virtual account routing based on user profile
+  const acctSuffix = params.userId.replace(/[^0-9]/g, '').padEnd(8, '45678901').slice(0, 8);
+  const accountNumber = `9870${acctSuffix}`;
+
+  return {
+    checkoutId,
+    checkoutUrl,
+    accountDetails: {
+      bankName: 'WeWire Treasury Bank / Evolve Bank & Trust',
+      accountName: `VessPay / ${params.userName}`,
+      accountNumber,
+      routingNumber: '021000021',
+      currency: params.currency,
+    },
+  };
+}
+
+export interface WeWireRateItem {
+  from: string;
+  to: string;
+  bid: string;
+  ask: string;
+  updatedAt: string;
+}
+
+export interface ExchangeRateResult {
+  from: string;
+  to: string;
+  rate: number;
+  asOf: string;
+}
+
+interface RatesCache {
+  rates: WeWireRateItem[];
+  timestamp: number;
+}
+
+let cachedRates: RatesCache | null = null;
+const CACHE_TTL_MS = 30_000; // 30 seconds in-memory TTL
+
+/**
+ * Fetches current rate table from WeWire's GET /v1/rates.
+ * Caches in memory for 30s to avoid unnecessary network latency and rate limits.
+ */
+export async function getWeWireRates(forceRefresh = false): Promise<WeWireRateItem[]> {
+  const now = Date.now();
+  if (!forceRefresh && cachedRates && now - cachedRates.timestamp < CACHE_TTL_MS) {
+    return cachedRates.rates;
+  }
+
+  const apiKey = process.env.WEWIRE_API_KEY;
+  const baseUrl = (process.env.WEWIRE_BASE_URL || 'https://stage-capi.wewireafrica.com').replace(/\/$/, '');
+
+  if (!apiKey) {
+    console.warn('WEWIRE_API_KEY is not configured; using fallback rate table');
+    return [
+      { from: 'USD', to: 'GHS', bid: '11.58', ask: '0', updatedAt: new Date().toISOString() },
+      { from: 'EUR', to: 'GHS', bid: '12.85', ask: '750', updatedAt: new Date().toISOString() },
+      { from: 'GBP', to: 'GHS', bid: '15.01', ask: '0', updatedAt: new Date().toISOString() },
+      { from: 'USD', to: 'NGN', bid: '843.55', ask: '850.4', updatedAt: new Date().toISOString() },
+    ];
+  }
+
+  const endpoint = `${baseUrl}/v1/rates`;
+  try {
+    const res = await fetch(endpoint, {
+      method: 'GET',
+      headers: {
+        'ww-api-key': apiKey,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.warn(`WeWire /v1/rates returned non-200 (${res.status}):`, errText);
+      if (cachedRates) return cachedRates.rates;
+      throw new Error(`WeWire rates request failed with status ${res.status}`);
+    }
+
+    const data: any = await res.json();
+    if (Array.isArray(data)) {
+      cachedRates = {
+        rates: data,
+        timestamp: now,
+      };
+      return data;
+    }
+
+    if (cachedRates) return cachedRates.rates;
+    throw new Error('Unexpected WeWire rates response format');
+  } catch (err) {
+    console.error('Error fetching WeWire rates:', err);
+    if (cachedRates) return cachedRates.rates;
+    return [
+      { from: 'USD', to: 'GHS', bid: '11.58', ask: '0', updatedAt: new Date().toISOString() },
+      { from: 'EUR', to: 'GHS', bid: '12.85', ask: '750', updatedAt: new Date().toISOString() },
+      { from: 'GBP', to: 'GHS', bid: '15.01', ask: '0', updatedAt: new Date().toISOString() },
+      { from: 'USD', to: 'NGN', bid: '843.55', ask: '850.4', updatedAt: new Date().toISOString() },
+    ];
+  }
+}
+
+/**
+ * Retrieves the exchange rate for a specific currency pair (e.g. from USD to GHS).
+ * Returns ExchangeRateResult or null if the pair is not supported.
+ */
+export async function getExchangeRate(
+  fromCurrency: string,
+  toCurrency: string,
+  forceRefresh = false
+): Promise<ExchangeRateResult | null> {
+  const from = fromCurrency.trim().toUpperCase();
+  const to = toCurrency.trim().toUpperCase();
+
+  const rates = await getWeWireRates(forceRefresh);
+
+  // 1. Direct match: from -> to
+  const directMatch = rates.find((r) => r.from.toUpperCase() === from && r.to.toUpperCase() === to);
+  if (directMatch) {
+    const bid = parseFloat(directMatch.bid);
+    const ask = parseFloat(directMatch.ask);
+    const rate = bid > 0 ? bid : ask;
+    if (rate > 0) {
+      return {
+        from,
+        to,
+        rate,
+        asOf: directMatch.updatedAt || new Date().toISOString(),
+      };
+    }
+  }
+
+  // 2. Inverse match: to -> from
+  const inverseMatch = rates.find((r) => r.from.toUpperCase() === to && r.to.toUpperCase() === from);
+  if (inverseMatch) {
+    const bid = parseFloat(inverseMatch.bid);
+    const ask = parseFloat(inverseMatch.ask);
+    const baseRate = ask > 0 ? ask : bid;
+    if (baseRate > 0) {
+      return {
+        from,
+        to,
+        rate: parseFloat((1 / baseRate).toFixed(6)),
+        asOf: inverseMatch.updatedAt || new Date().toISOString(),
+      };
+    }
+  }
+
+  return null;
+}
+
+export interface CreateWeWireBeneficiaryParams {
+  name: string;
+  /** Operator or bank: a WeWire sort code ('MTN', 'GCB') or a display name. */
+  network: string;
+  /** Mobile money number. Required for MOBILE_MONEY payouts. */
+  phone?: string;
+  /** Bank account number. Required for BANK payouts. */
+  accountNumber?: string;
+  /** Defaults to MOBILE_MONEY for backwards compatibility. */
+  channel?: PayoutChannel;
+  country?: string | null;
+  subCustomerId?: string | null;
+  email?: string | null;
+}
+
+export interface CreateWeWireBeneficiaryResult {
+  wewireBeneficiaryId: string;
+  wewireAccountId: string;
+  network: string;
+  accountNumber: string;
+  accountName: string;
+  channel: PayoutChannel;
+  institutionCode: string;
+}
+
+/**
+ * Normalizes input Ghana phone number to 10-digit MSISDN and international format.
+ */
+export function normalizeGhanaPhone(phoneInput: string): { msisdn: string; international: string } {
+  const digits = phoneInput.replace(/\D/g, '');
+  let msisdn = digits;
+  if (digits.startsWith('233') && digits.length === 12) {
+    msisdn = '0' + digits.slice(3);
+  } else if (digits.length === 9) {
+    msisdn = '0' + digits;
+  }
+  const international = `+233${msisdn.replace(/^0/, '')}`;
+  return { msisdn, international };
+}
+
+/**
+ * Maps Ghana network names to WeWire operator codes and bank names.
+ */
+export function mapGhanaNetwork(networkInput: string): { network: string; sortCode: string; bankName: string } {
+  const net = networkInput.trim().toUpperCase();
+  if (net === 'MTN') {
+    return { network: 'MTN', sortCode: 'MTN', bankName: 'MTN Mobile Money' };
+  }
+  if (net === 'TELECEL' || net === 'VODAFONE' || net === 'VOD') {
+    return { network: 'Telecel', sortCode: 'VOD', bankName: 'Telecel Cash' };
+  }
+  if (net === 'AIRTELTIGO' || net === 'AIRTEL' || net === 'TIGO' || net === 'ATM') {
+    return { network: 'AirtelTigo', sortCode: 'ATM', bankName: 'AirtelTigo Money' };
+  }
+  throw new Error(`Unsupported network: "${networkInput}". Supported networks are MTN, Telecel, and AirtelTigo.`);
+}
+
+/**
+ * Creates both a WeWire beneficiary and its Mobile Money beneficiary account
+ * via POST /v1/beneficiaries against the live WeWire sandbox.
+ * Returns the created wewire_beneficiary_id and wewire_account_id.
+ */
+export async function createWeWireBeneficiary(
+  params: CreateWeWireBeneficiaryParams
+): Promise<CreateWeWireBeneficiaryResult> {
+  const apiKey = process.env.WEWIRE_API_KEY;
+  const baseUrl = (process.env.WEWIRE_BASE_URL || 'https://stage-capi.wewireafrica.com').replace(/\/$/, '');
+
+  const institution = await resolveInstitution(params.network);
+  const isBank = (params.channel ?? institution.channel) === 'BANK';
+  const alpha3Country = toAlpha3Country(params.country || 'GHA');
+
+  // Mobile money is addressed by MSISDN, a bank account by its account number.
+  const { msisdn, international } = normalizeGhanaPhone(params.phone || '');
+  let destinationAccount = msisdn;
+  if (isBank) {
+    const normalized = normalizeBankAccountNumber(params.accountNumber || '');
+    if (!normalized) {
+      throw new Error(
+        'A valid bank account number (8-20 digits) is required for a bank beneficiary'
+      );
+    }
+    destinationAccount = normalized;
+  } else if (!/^0[235]\d{8}$/.test(msisdn)) {
+    throw new Error(
+      'A valid 10-digit Ghana mobile money number is required for a mobile money beneficiary'
+    );
+  }
+
+  // Split name into first and last name
+  const cleanName = params.name.trim();
+  const nameParts = cleanName.split(/\s+/);
+  const firstName = nameParts[0] || 'Recipient';
+  const lastName = nameParts.slice(1).join(' ') || firstName;
+  const email =
+    params.email?.trim().toLowerCase() ||
+    `${firstName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'recipient'}.${destinationAccount}@vesspay.internal`;
+
+  const channel: PayoutChannel = isBank ? 'BANK' : 'MOBILE_MONEY';
+
+  if (!apiKey) {
+    console.warn('WEWIRE_API_KEY is not configured; using fallback beneficiary IDs');
+    const fakeId = `ben_stub_${Date.now()}`;
+    return {
+      wewireBeneficiaryId: fakeId,
+      wewireAccountId: `acc_stub_${Date.now()}`,
+      network: institution.name,
+      accountNumber: destinationAccount,
+      accountName: cleanName,
+      channel,
+      institutionCode: institution.code,
+    };
+  }
+
+  let payload: any = {
+    type: 'INDIVIDUAL',
+    firstName,
+    lastName,
+    email,
+    // A bank beneficiary still carries a contact number when we have one.
+    telephone: params.phone ? international : undefined,
+    country: alpha3Country,
+    currency: 'GHS',
+    subCustomerId: params.subCustomerId && !params.subCustomerId.startsWith('sub_stub_')
+      ? params.subCustomerId
+      : undefined,
+    accountDetails: {
+      // Verified sandbox enum: MOBILE_MONEY | BANK_ACCOUNT | CRYPTO_WALLET
+      type: institution.accountType,
+      accountNumber: destinationAccount,
+      accountName: cleanName,
+      currency: 'GHS',
+      bankName: institution.name,
+      sortCode: institution.code,
+    },
+  };
+
+  const endpoint = `${baseUrl}/v1/beneficiaries`;
+  let res = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'ww-api-key': apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  let text = await res.text();
+  let data: any;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = text;
+  }
+
+  // If subcustomer is not approved in sandbox, retry without subCustomerId
+  if (!res.ok && payload.subCustomerId && text.includes('Sub-customer is not approved')) {
+    delete payload.subCustomerId;
+    res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'ww-api-key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    text = await res.text();
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+  }
+
+  if (!res.ok) {
+    const errMsg =
+      typeof data === 'object' && data?.error?.message
+        ? data.error.message
+        : typeof data === 'object' && data?.message
+        ? data.message
+        : JSON.stringify(data);
+    throw new Error(`Failed to create WeWire beneficiary: ${errMsg} (Status: ${res.status})`);
+  }
+
+  const beneficiaryId = data?.id;
+  if (!beneficiaryId) {
+    throw new Error('WeWire did not return a beneficiary ID in response');
+  }
+
+  // Retrieve the created beneficiary to fetch the generated wewire_account_id
+  let accountId: string | null = null;
+  try {
+    const getRes = await fetch(`${baseUrl}/v1/beneficiaries/${beneficiaryId}`, {
+      method: 'GET',
+      headers: {
+        'ww-api-key': apiKey,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (getRes.ok) {
+      const benDetails: any = await getRes.json();
+      const accounts = benDetails?.beneficiaryAccounts;
+      if (Array.isArray(accounts) && accounts.length > 0) {
+        accountId = accounts[0].id;
+      }
+    }
+  } catch (err) {
+    console.warn(`Could not retrieve account details for beneficiary ${beneficiaryId}:`, err);
+  }
+
+  return {
+    wewireBeneficiaryId: beneficiaryId,
+    wewireAccountId: accountId || beneficiaryId,
+    network: institution.name,
+    accountNumber: destinationAccount,
+    accountName: cleanName,
+    channel,
+    institutionCode: institution.code,
+  };
+}
+
+/**
+ * Retrieves a beneficiary from WeWire by its ID.
+ */
+export async function getWeWireBeneficiary(wewireBeneficiaryId: string): Promise<any> {
+  const apiKey = process.env.WEWIRE_API_KEY;
+  const baseUrl = (process.env.WEWIRE_BASE_URL || 'https://stage-capi.wewireafrica.com').replace(/\/$/, '');
+
+  if (!apiKey || !wewireBeneficiaryId || wewireBeneficiaryId.startsWith('ben_stub_')) {
+    return null;
+  }
+
+  const endpoint = `${baseUrl}/v1/beneficiaries/${wewireBeneficiaryId}`;
+  const res = await fetch(endpoint, {
+    method: 'GET',
+    headers: {
+      'ww-api-key': apiKey,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!res.ok) {
+    return null;
+  }
+
+  return await res.json();
+}
+
+/**
+ * Deletes a beneficiary from WeWire by its ID.
+ */
+export async function deleteWeWireBeneficiary(wewireBeneficiaryId: string): Promise<boolean> {
+  const apiKey = process.env.WEWIRE_API_KEY;
+  const baseUrl = (process.env.WEWIRE_BASE_URL || 'https://stage-capi.wewireafrica.com').replace(/\/$/, '');
+
+  if (!apiKey || !wewireBeneficiaryId || wewireBeneficiaryId.startsWith('ben_stub_')) {
+    return true;
+  }
+
+  try {
+    const endpoint = `${baseUrl}/v1/beneficiaries/${wewireBeneficiaryId}`;
+    const res = await fetch(endpoint, {
+      method: 'DELETE',
+      headers: {
+        'ww-api-key': apiKey,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    return res.ok || res.status === 404;
+  } catch (err) {
+    console.warn(`Failed to delete WeWire beneficiary ${wewireBeneficiaryId}:`, err);
+    return false;
+  }
+}
+
+export interface SendWeWireDisbursementParams {
+  idempotencyKey: string;
+  amount: number;
+  currency?: string;
+  /** Operator or bank: a WeWire sort code ('MTN', 'GCB') or a display name. */
+  network: string;
+  /** Mobile money number. Required for MOBILE_MONEY payouts. */
+  phone?: string;
+  /** Bank account number. Required for BANK payouts. */
+  accountNumber?: string;
+  /** Defaults to whichever channel the institution belongs to. */
+  channel?: PayoutChannel;
+  recipientName: string;
+  reference?: string;
+  memo?: string;
+}
+
+export interface SendWeWireDisbursementResult {
+  wewireTransactionId: string;
+  status: string;
+  amount?: string;
+  fee?: string;
+  currency?: string;
+  channel?: string;
+}
+
+/**
+ * Sends a real mobile money payout via WeWire's POST /v1/disbursements endpoint.
+ * Per current docs: local African disbursements use POST /v1/disbursements.
+ */
+export async function sendWeWireDisbursement(
+  params: SendWeWireDisbursementParams
+): Promise<SendWeWireDisbursementResult> {
+  const apiKey = process.env.WEWIRE_API_KEY;
+  const baseUrl = (process.env.WEWIRE_BASE_URL || 'https://stage-capi.wewireafrica.com').replace(/\/$/, '');
+
+  const institution = await resolveInstitution(params.network);
+  const channel: PayoutChannel = params.channel ?? institution.channel;
+  const currency = (params.currency || 'GHS').trim().toUpperCase();
+
+  // Mobile money is addressed by MSISDN, a bank account by its account number.
+  let destinationAccount: string;
+  if (channel === 'BANK') {
+    const normalized = normalizeBankAccountNumber(params.accountNumber || '');
+    if (!normalized) {
+      throw new Error('A valid bank account number (8-20 digits) is required for a bank payout');
+    }
+    destinationAccount = normalized;
+  } else {
+    destinationAccount = normalizeGhanaPhone(params.phone || '').msisdn;
+  }
+
+  if (!apiKey) {
+    console.warn('WEWIRE_API_KEY is not configured; using fallback disbursement stub');
+    return {
+      wewireTransactionId: `ww_tx_stub_${Date.now()}`,
+      status: 'PENDING',
+      amount: params.amount.toString(),
+      currency,
+      channel,
+    };
+  }
+
+  const endpoint = `${baseUrl}/v1/disbursements`;
+  const payload = {
+    idempotencyKey: params.idempotencyKey,
+    amount: params.amount,
+    currency,
+    // Verified sandbox enum: MOBILE_MONEY | BANK
+    channel,
+    accountCode: institution.code, // MTN / VOD / ATM, or a bank sort code such as GCB
+    accountNumber: destinationAccount,
+    accountName: params.recipientName.trim(),
+    reference: params.reference || undefined,
+    memo: params.memo || 'VessPay Payout',
+  };
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'ww-api-key': apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await response.text();
+  let data: any;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = text;
+  }
+
+  if (!response.ok) {
+    const errMsg =
+      typeof data === 'object' && data?.error?.message
+        ? data.error.message
+        : typeof data === 'object' && data?.message
+        ? data.message
+        : JSON.stringify(data);
+    throw new Error(`WeWire disbursement failed: ${errMsg} (Status: ${response.status})`);
+  }
+
+  const wewireTransactionId = data?.id;
+  if (!wewireTransactionId) {
+    throw new Error('WeWire did not return a transaction ID in disbursement response');
+  }
+
+  return {
+    wewireTransactionId,
+    status: data?.status || 'PENDING',
+    amount: data?.amount ? String(data.amount) : String(params.amount),
+    fee: data?.fee ? String(data.fee) : undefined,
+    currency: data?.currency || currency,
+    channel: data?.channel || channel,
+  };
+}
+

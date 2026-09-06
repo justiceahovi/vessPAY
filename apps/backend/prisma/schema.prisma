@@ -10,7 +10,130 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Placeholder model - replaced in T1.1 migrations
-model Placeholder {
-  id Int @id @default(autoincrement())
+model User {
+  id                  String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  firstName           String          @map("first_name")
+  lastName            String          @map("last_name")
+  email               String          @unique
+  passwordHash        String          @map("password_hash")
+  country             String?
+  nationality         String?
+  wewireSubcustomerId String?         @map("wewire_subcustomer_id")
+  /// Wallet currency the user chose on first sign-on; null until they pick one.
+  primaryCurrency     String?         @map("primary_currency")
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  travelProfiles      TravelProfile[]
+  wallets             Wallet[]
+  fundingTransactions FundingTransaction[]
+  beneficiaries       Beneficiary[]
+  transactions        Transaction[]
+
+  @@map("users")
 }
+
+model TravelProfile {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId              String   @map("user_id") @db.Uuid
+  destinationCountry  String   @map("destination_country")
+  destinationCurrency String   @map("destination_currency")
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("travel_profiles")
+}
+
+model Wallet {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  currency       String   @default("USD")
+  balance        Decimal  @default(0.00) @db.Decimal(14, 2)
+  wewireWalletId String?  @map("wewire_wallet_id")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("wallets")
+}
+
+model FundingTransaction {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  amount     Decimal  @db.Decimal(14, 2)
+  currency   String   @default("USD")
+  checkoutId String?  @map("checkout_id")
+  status     String   @default("PENDING")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("funding_transactions")
+}
+
+model WebhookEvent {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provider  String   @default("wewire")
+  eventType String   @map("event_type")
+  eventId   String   @unique @map("event_id")
+  payload   Json
+  processed Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("webhook_events")
+}
+
+model Beneficiary {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId              String   @map("user_id") @db.Uuid
+  name                String
+  country             String
+  network             String
+  channel             String   @default("MOBILE_MONEY") // 'MOBILE_MONEY' | 'BANK'
+  phone               String?
+  accountNumber       String?  @map("account_number")
+  institutionCode     String?  @map("institution_code") // WeWire sort code, e.g. MTN or GCB
+  wewireBeneficiaryId String?  @map("wewire_beneficiary_id")
+  wewireAccountId     String?  @map("wewire_account_id")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("beneficiaries")
+}
+
+model Transaction {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId              String   @map("user_id") @db.Uuid
+  type                String   // 'payout' | 'topup'
+  status              String   // 'CREATED' | 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+  sourceCurrency      String   @map("source_currency")
+  sourceAmount        Decimal  @map("source_amount") @db.Decimal(14, 2)
+  destinationCurrency String   @map("destination_currency")
+  destinationAmount   Decimal  @map("destination_amount") @db.Decimal(14, 2)
+  fee                 Decimal  @db.Decimal(14, 2)
+  exchangeRate        Decimal  @map("exchange_rate") @db.Decimal(14, 6)
+  recipientName       String?  @map("recipient_name")
+  recipientPhone      String?  @map("recipient_phone")
+  recipientAccount    String?  @map("recipient_account") // bank account number for BANK payouts
+  channel             String   @default("MOBILE_MONEY") // 'MOBILE_MONEY' | 'BANK'
+  institutionCode     String?  @map("institution_code") // WeWire sort code used for the payout
+  network             String?
+  country             String?
+  wewireTransactionId String?  @map("wewire_transaction_id")
+  idempotencyKey      String   @unique @map("idempotency_key")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("transactions")
+}
+
+

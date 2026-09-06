@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: vesspay-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-vesspay}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vesspay_secure_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-vesspay}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vesspay} -d ${POSTGRES_DB:-vesspay}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    container_name: vesspay-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vesspay}:${POSTGRES_PASSWORD:-vesspay_secure_pass}@postgres:5432/${POSTGRES_DB:-vesspay}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key_change_me_in_prod}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      WEWIRE_API_KEY: ${WEWIRE_API_KEY}
+      WEWIRE_BASE_URL: ${WEWIRE_BASE_URL:-https://stage-capi.wewireafrica.com}
+      WEWIRE_WEBHOOK_SECRET: ${WEWIRE_WEBHOOK_SECRET}
+      PAYMENT_FEE_PERCENT: ${PAYMENT_FEE_PERCENT:-0.01}
+    command: >
+      sh -c "npx prisma migrate deploy && dumb-init node dist/index.js"
+
+volumes:
+  postgres_data:

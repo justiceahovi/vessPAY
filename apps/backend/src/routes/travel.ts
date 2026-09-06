@@ -1,0 +1,182 @@
+import { Router, Request, Response } from 'express';
+import { prisma } from '../lib/db';
+import { authenticate } from '../middleware/auth';
+import { TravelProfile } from '@prisma/client';
+
+const router = Router();
+
+export interface DestinationInfo {
+  country: string;
+  name: string;
+  currency: string;
+}
+
+/**
+ * Hackathon MVP supported destinations catalog.
+ * Shaped as an array so additional countries can be added later without API contract changes.
+ */
+export const SUPPORTED_DESTINATIONS: DestinationInfo[] = [
+  {
+    country: 'GH',
+    name: 'Ghana',
+    currency: 'GHS',
+  },
+  {
+    country: 'NG',
+    name: 'Nigeria',
+    currency: 'NGN',
+  },
+];
+
+const DESTINATION_LOOKUP: Record<string, DestinationInfo> = {
+  GH: SUPPORTED_DESTINATIONS[0],
+  GHANA: SUPPORTED_DESTINATIONS[0],
+  NG: SUPPORTED_DESTINATIONS[1],
+  NIGERIA: SUPPORTED_DESTINATIONS[1],
+};
+
+export function resolveDestination(input: string): DestinationInfo | null {
+  if (!input || typeof input !== 'string') return null;
+  const key = input.trim().toUpperCase();
+  return DESTINATION_LOOKUP[key] || null;
+}
+
+export function formatTravelProfile(profile: TravelProfile) {
+  return {
+    id: profile.id,
+    userId: profile.userId,
+    destinationCountry: profile.destinationCountry,
+    destinationCurrency: profile.destinationCurrency,
+    isActive: profile.isActive,
+    createdAt: profile.createdAt.toISOString(),
+    updatedAt: profile.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * GET /api/travel/destinations
+ * Returns supported travel destinations array [{ country, currency, name }].
+ */
+router.get('/destinations', (_req: Request, res: Response): void => {
+  res.status(200).json(SUPPORTED_DESTINATIONS);
+});
+
+/**
+ * GET /api/travel/current
+ * Returns the authenticated user's active travel profile, or null if not yet set.
+ */
+router.get('/current', authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+
+    const profile = await prisma.travelProfile.findFirst({
+      where: {
+        userId,
+        isActive: true,
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+    });
+
+    if (!profile) {
+      res.status(200).json(null);
+      return;
+    }
+
+    res.status(200).json(formatTravelProfile(profile));
+  } catch (err: any) {
+    console.error('Error fetching current travel profile:', err);
+    res.status(500).json({
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to retrieve current travel profile',
+      },
+    });
+  }
+});
+
+/**
+ * PUT /api/travel/current
+ * Sets or updates the active travel destination profile for the authenticated user.
+ * Body: { destinationCountry: 'GH' | 'Ghana' | 'NG' | 'Nigeria' }
+ */
+router.put('/current', authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const rawDestination = req.body?.destinationCountry || req.body?.country;
+
+    if (!rawDestination || typeof rawDestination !== 'string' || !rawDestination.trim()) {
+      res.status(400).json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'destinationCountry is required',
+        },
+      });
+      return;
+    }
+
+    const destination = resolveDestination(rawDestination);
+    if (!destination) {
+      res.status(400).json({
+        error: {
+          code: 'INVALID_DESTINATION',
+          message: `Destination '${rawDestination}' is not supported. Supported destinations: GH (Ghana), NG (Nigeria)`,
+        },
+      });
+      return;
+    }
+
+    const activeProfile = await prisma.$transaction(async (tx) => {
+      // Deactivate any currently active profiles for this user
+      await tx.travelProfile.updateMany({
+        where: {
+          userId,
+          isActive: true,
+        },
+        data: {
+          isActive: false,
+        },
+      });
+
+      // Check if a profile record already exists for this destination
+      const existing = await tx.travelProfile.findFirst({
+        where: {
+          userId,
+          destinationCountry: destination.country,
+        },
+      });
+
+      if (existing) {
+        return tx.travelProfile.update({
+          where: { id: existing.id },
+          data: {
+            isActive: true,
+            destinationCurrency: destination.currency,
+          },
+        });
+      } else {
+        return tx.travelProfile.create({
+          data: {
+            userId,
+            destinationCountry: destination.country,
+            destinationCurrency: destination.currency,
+            isActive: true,
+          },
+        });
+      }
+    });
+
+    res.status(200).json(formatTravelProfile(activeProfile));
+  } catch (err: any) {
+    console.error('Error updating current travel profile:', err);
+    res.status(500).json({
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to update current travel profile',
+      },
+    });
+  }
+});
+
+export default router;
