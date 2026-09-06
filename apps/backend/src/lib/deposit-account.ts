@@ -3,6 +3,7 @@ import { DEFAULT_WALLET_CURRENCY } from './currencies';
 import {
   AccountRequestDetails,
   getHostedKycLink,
+  listWeWireSubCustomerAccounts,
   getSubCustomerStatus,
   isSourceOfFunds,
   resolveWeWireDepositAccount,
@@ -20,6 +21,7 @@ import {
  */
 export type DepositAccountState =
   | 'READY'
+  | 'NOT_REQUESTED'
   | 'PROVISIONING'
   | 'KYC_REQUIRED'
   | 'SOURCE_OF_FUNDS_REQUIRED'
@@ -108,9 +110,39 @@ export async function getDepositAccountStatus(
     details.sourceOfFunds = user.sourceOfFunds as SourceOfFunds;
   }
 
-  // Read-only poll: report what exists without asking WeWire to create anything.
-  if (!opts.provision && !wallet?.wewireAccountId) {
-    return { ...base, state: 'PROVISIONING' };
+  // Read-only poll: ask WeWire what already exists rather than trusting the
+  // cached column, and never conflate "never requested" with "still issuing" —
+  // the client must POST for the former and only waits for the latter.
+  if (!opts.provision) {
+    const existing = await listWeWireSubCustomerAccounts(
+      user.wewireSubcustomerId
+    );
+    const match = existing.find(
+      (a) => (a.currency || '').toUpperCase() === currency
+    );
+
+    if (!match) {
+      return { ...base, state: 'NOT_REQUESTED' };
+    }
+
+    const status = (match.status || 'UNKNOWN').toUpperCase();
+    if (wallet && wallet.wewireAccountId !== match.id) {
+      await prisma.wallet.update({
+        where: { id: wallet.id },
+        data: { wewireAccountId: match.id },
+      });
+    }
+
+    return {
+      ...base,
+      state: status === 'ACTIVE' ? 'READY' : 'PROVISIONING',
+      accountId: match.id,
+      accountStatus: status,
+      accountDetails:
+        status === 'ACTIVE'
+          ? (match as unknown as Record<string, unknown>)
+          : null,
+    };
   }
 
   try {

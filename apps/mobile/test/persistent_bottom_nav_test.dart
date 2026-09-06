@@ -54,6 +54,10 @@ class NavMockAuthRepository implements AuthRepository {
 }
 
 class NavMockWalletRepository implements WalletRepository {
+  /// Last funding transaction a WeWire sandbox deposit was requested for.
+  String? simulatedDepositFor;
+
+
   @override
   Future<List<WalletBalanceModel>> getBalances() async => [
         const WalletBalanceModel(currency: 'USD', balance: 500.0),
@@ -95,6 +99,11 @@ class NavMockWalletRepository implements WalletRepository {
         state: DepositAccountState.ready,
         currency: 'USD',
       );
+
+  @override
+  Future<void> simulateWeWireDeposit(String fundingTransactionId) async {
+    simulatedDepositFor = fundingTransactionId;
+  }
 }
 
 class NavMockTravelRepository implements TravelRepository {

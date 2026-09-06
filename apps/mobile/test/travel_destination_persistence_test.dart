@@ -106,6 +106,10 @@ class StoredTravelRepository implements TravelRepository {
 }
 
 class FakeWalletRepository implements WalletRepository {
+  /// Last funding transaction a WeWire sandbox deposit was requested for.
+  String? simulatedDepositFor;
+
+
   @override
   Future<List<WalletBalanceModel>> getBalances() async => const [
         WalletBalanceModel(currency: 'USD', balance: 500.0),
@@ -149,6 +153,11 @@ class FakeWalletRepository implements WalletRepository {
         state: DepositAccountState.ready,
         currency: 'USD',
       );
+
+  @override
+  Future<void> simulateWeWireDeposit(String fundingTransactionId) async {
+    simulatedDepositFor = fundingTransactionId;
+  }
 }
 
 class FakePaymentRepository implements PaymentRepository {

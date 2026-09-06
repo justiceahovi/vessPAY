@@ -404,18 +404,24 @@ router.post('/topup', authenticate, async (req: Request, res: Response): Promise
       }
     }
 
-    const accountDetails = depositAccount
-      ? {
-          bankName: depositAccount.account.bankName ?? null,
-          accountName: depositAccount.account.accountName ?? null,
-          accountNumber: depositAccount.account.accountNumber ?? null,
-          iban: depositAccount.account.iban ?? null,
-          bic: depositAccount.account.bic ?? null,
-          paymentRails: depositAccount.account.paymentRails ?? [],
-          currency: depositAccount.currency,
-          status: depositAccount.status,
-        }
-      : fundingInfo.accountDetails;
+    // Bank details only exist once the account is ACTIVE: a REQUESTED account
+    // has every field null, which would render an empty details card. Fall back
+    // to the local demo rails rather than showing blanks.
+    const accountDetails =
+      depositAccount && depositAccount.isActive
+        ? {
+            bankName: depositAccount.account.bankName ?? null,
+            accountName: depositAccount.account.accountName ?? null,
+            accountNumber: depositAccount.account.accountNumber ?? null,
+            routingNumber: depositAccount.account.routingNumber ?? null,
+            sortCode: depositAccount.account.sortCode ?? null,
+            iban: depositAccount.account.iban ?? null,
+            bic: depositAccount.account.bic ?? null,
+            paymentRails: depositAccount.account.paymentRails ?? [],
+            currency: depositAccount.currency,
+            status: depositAccount.status,
+          }
+        : fundingInfo.accountDetails;
 
     res.status(201).json({
       fundingTransactionId: fundingTx.id,
@@ -425,7 +431,8 @@ router.post('/topup', authenticate, async (req: Request, res: Response): Promise
       amount: Number(fundingTx.amount),
       currency: fundingTx.currency,
       accountDetails,
-      accountSource: depositAccount ? 'wewire' : 'local',
+      accountSource:
+        depositAccount && depositAccount.isActive ? 'wewire' : 'local',
       wewireAccountId: depositAccount?.accountId ?? null,
       accountReady: depositAccount?.isActive ?? false,
       createdAt: fundingTx.createdAt.toISOString(),

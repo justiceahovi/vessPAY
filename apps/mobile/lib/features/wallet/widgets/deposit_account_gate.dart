@@ -29,6 +29,11 @@ class DepositAccountGate extends ConsumerStatefulWidget {
 class _DepositAccountGateState extends ConsumerState<DepositAccountGate> {
   bool _isSubmitting = false;
   bool _autoProvisionTried = false;
+
+  /// What the last provision attempt reported. A failed request returns a
+  /// terminal state that the read-only poll cannot see, so it is held here
+  /// rather than being overwritten by the next refresh.
+  DepositAccountModel? _lastAttempt;
   String? _selected;
   String? _error;
   Timer? _poll;
@@ -70,11 +75,21 @@ class _DepositAccountGateState extends ConsumerState<DepositAccountGate> {
       _error = null;
     });
     try {
-      await ref
+      final result = await ref
           .read(walletRepositoryProvider)
           .provisionDepositAccount(sourceOfFunds: sourceOfFunds);
+      if (!mounted) return;
+
+      // Only keep an outcome the poll cannot rediscover: a refusal. Anything
+      // in flight is better tracked by re-reading the live state.
+      setState(() {
+        _lastAttempt = result.state == DepositAccountState.unavailable ||
+                result.state == DepositAccountState.kycRequired
+            ? result
+            : null;
+      });
       ref.invalidate(depositAccountProvider);
-      _pollUntilReady();
+      if (_lastAttempt == null) _pollUntilReady();
     } catch (e) {
       if (mounted) {
         setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
@@ -92,21 +107,32 @@ class _DepositAccountGateState extends ConsumerState<DepositAccountGate> {
     // reports its own errors, and a stuck gate is worse than a failed request.
     if (async.hasError) return widget.child;
 
-    final account = async.valueOrNull;
+    final account = _lastAttempt ?? async.valueOrNull;
     if (account == null) return _shell(const _GateSpinner());
     if (account.isReady) return widget.child;
 
     switch (account.state) {
-      case DepositAccountState.provisioning:
-        // No account id means nothing has been requested yet: everything the
-        // issuer needs is on file, so ask for it rather than polling a state
-        // that will never change on its own.
-        if (account.accountId == null && !_autoProvisionTried) {
+      case DepositAccountState.notRequested:
+        // Everything the issuer needs is on file, so ask for the account rather
+        // than showing a spinner over a state that never changes on its own.
+        if (!_autoProvisionTried) {
           _autoProvisionTried = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) _provision();
           });
         }
+        return _shell(
+          _GateMessage(
+            key: const Key('deposit_account_provisioning'),
+            icon: Icons.hourglass_top_rounded,
+            title: 'Setting up your deposit account',
+            body:
+                'Your ${account.currency} account is being requested. This usually takes a moment.',
+            child: const _GateSpinner(),
+          ),
+        );
+
+      case DepositAccountState.provisioning:
         _ensurePolling();
         return _shell(
           _GateMessage(

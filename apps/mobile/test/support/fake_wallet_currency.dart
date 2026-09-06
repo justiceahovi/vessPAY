@@ -10,6 +10,10 @@ import 'package:vesspay/features/wallet/repositories/wallet_repository.dart';
 /// Offline wallet repository for tests that only care about the currency the
 /// wallet is held in, so no screen reaches for the network.
 class FakeCurrencyWalletRepository implements WalletRepository {
+  /// Last funding transaction a WeWire sandbox deposit was requested for.
+  String? simulatedDepositFor;
+
+
   String? savedCurrency;
 
   /// Deposit-account state the gate should see. Defaults to a ready account so
@@ -74,6 +78,11 @@ class FakeCurrencyWalletRepository implements WalletRepository {
       currency: 'USD',
     );
     return depositAccount;
+  }
+
+  @override
+  Future<void> simulateWeWireDeposit(String fundingTransactionId) async {
+    simulatedDepositFor = fundingTransactionId;
   }
 }
 

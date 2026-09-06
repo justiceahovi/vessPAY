@@ -31,6 +31,10 @@ class VerifiedKycRepository implements KycRepository {
 }
 
 class MockWalletRepositoryForAddMoney implements WalletRepository {
+  /// Last funding transaction a WeWire sandbox deposit was requested for.
+  String? simulatedDepositFor;
+
+
   List<WalletBalanceModel> balances = [
     const WalletBalanceModel(currency: 'USD', balance: 50.00),
   ];
@@ -110,6 +114,11 @@ class MockWalletRepositoryForAddMoney implements WalletRepository {
         state: DepositAccountState.ready,
         currency: 'USD',
       );
+
+  @override
+  Future<void> simulateWeWireDeposit(String fundingTransactionId) async {
+    simulatedDepositFor = fundingTransactionId;
+  }
 }
 
 void main() {

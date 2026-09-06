@@ -74,6 +74,10 @@ class TestMockKycRepository implements KycRepository {
 }
 
 class TestMockWalletRepository implements WalletRepository {
+  /// Last funding transaction a WeWire sandbox deposit was requested for.
+  String? simulatedDepositFor;
+
+
   @override
   Future<List<WalletBalanceModel>> getBalances() async => [
         const WalletBalanceModel(currency: 'USD', balance: 500.00),
@@ -115,6 +119,11 @@ class TestMockWalletRepository implements WalletRepository {
         state: DepositAccountState.ready,
         currency: 'USD',
       );
+
+  @override
+  Future<void> simulateWeWireDeposit(String fundingTransactionId) async {
+    simulatedDepositFor = fundingTransactionId;
+  }
 }
 
 class TestMockTravelRepository implements TravelRepository {

@@ -28,6 +28,11 @@ abstract class WalletRepository {
   });
   Future<TopupResponseModel> getTopupStatus(String fundingTransactionId);
   Future<TopupResponseModel> confirmTopup(String fundingTransactionId);
+
+  /// Asks WeWire to drop a sandbox deposit onto the user's real virtual
+  /// account. The wallet is credited by the resulting pay-in webhook, not by
+  /// this call, so the caller has to wait for the balance rather than assume it.
+  Future<void> simulateWeWireDeposit(String fundingTransactionId);
 }
 
 class ApiWalletRepository implements WalletRepository {
@@ -128,6 +133,14 @@ class ApiWalletRepository implements WalletRepository {
       '/api/wallet/topup/$fundingTransactionId',
       fromJson: (data) =>
           TopupResponseModel.fromJson(data as Map<String, dynamic>),
+    );
+  }
+
+  @override
+  Future<void> simulateWeWireDeposit(String fundingTransactionId) async {
+    await _apiClient.post<void>(
+      '/api/wallet/topup/$fundingTransactionId/simulate',
+      fromJson: (_) {},
     );
   }
 

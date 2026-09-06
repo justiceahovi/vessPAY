@@ -58,6 +58,10 @@ class MockTravelRepository implements TravelRepository {
 /// The Home balance card only renders its local-currency reference line when
 /// balances resolve, so the corridor assertions need a working wallet source.
 class MockWalletRepositoryForIndicator implements WalletRepository {
+  /// Last funding transaction a WeWire sandbox deposit was requested for.
+  String? simulatedDepositFor;
+
+
   @override
   Future<List<WalletBalanceModel>> getBalances() async => const [
         WalletBalanceModel(currency: 'USD', balance: 500.0),
@@ -101,6 +105,11 @@ class MockWalletRepositoryForIndicator implements WalletRepository {
         state: DepositAccountState.ready,
         currency: 'USD',
       );
+
+  @override
+  Future<void> simulateWeWireDeposit(String fundingTransactionId) async {
+    simulatedDepositFor = fundingTransactionId;
+  }
 }
 
 void main() {

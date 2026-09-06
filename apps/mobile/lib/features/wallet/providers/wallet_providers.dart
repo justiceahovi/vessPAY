@@ -216,6 +216,27 @@ class TopupNotifier extends StateNotifier<TopupState> {
     });
   }
 
+  /// Real deposit path: WeWire drops the money on the user's virtual account
+  /// and the pay-in webhook credits the wallet. Nothing is credited here, so
+  /// this keeps polling the funding transaction until the webhook lands.
+  Future<bool> simulateWeWireDeposit(String fundingTransactionId) async {
+    try {
+      await _repository.simulateWeWireDeposit(fundingTransactionId);
+      state = state.copyWith(
+        step: TopupStep.waitingConfirmation,
+        isPolling: true,
+        errorMessage: null,
+      );
+      _startPolling(fundingTransactionId);
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        errorMessage: 'Could not request the deposit: $e',
+      );
+      return false;
+    }
+  }
+
   Future<bool> confirmTopup(String fundingTransactionId) async {
     try {
       final confirmed = await _repository.confirmTopup(fundingTransactionId);

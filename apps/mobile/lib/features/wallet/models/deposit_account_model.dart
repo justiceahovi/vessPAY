@@ -7,6 +7,10 @@ enum DepositAccountState {
   /// The account exists and can receive money.
   ready,
 
+  /// Nothing has been requested yet. The client has to ask for the account;
+  /// polling alone would wait forever.
+  notRequested,
+
   /// Requested, but WeWire is still provisioning it. Poll until ready.
   provisioning,
 
@@ -63,6 +67,8 @@ class DepositAccountModel {
     switch ((raw ?? '').trim().toUpperCase()) {
       case 'READY':
         return DepositAccountState.ready;
+      case 'NOT_REQUESTED':
+        return DepositAccountState.notRequested;
       case 'PROVISIONING':
         return DepositAccountState.provisioning;
       case 'KYC_REQUIRED':

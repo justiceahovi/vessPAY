@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/db';
 import { verifyWeWireSignature } from '../lib/webhook';
+import { DEFAULT_WALLET_CURRENCY } from '../lib/currencies';
 
 const router = Router();
 
@@ -296,6 +297,76 @@ router.post('/wewire', async (req: Request, res: Response): Promise<void> => {
           }
         } else {
           console.warn(`[Webhook] No matching payout transaction found for event ${eventId}`);
+        }
+      }
+
+      // 4c. Virtual account provisioning (WeWire fires a status update on every
+      // transition: REQUESTED -> PENDING -> ACTIVE). Recording the account id
+      // here means the deposit screen learns it has gone live without polling.
+      const isAccountStatusUpdate =
+        eventType === 'virtual_account.status_updated' ||
+        eventType === 'subcustomer.account.status_updated' ||
+        eventType === 'account.status_updated';
+
+      if (isAccountStatusUpdate) {
+        const accountId = data.id || data.accountId || data.virtualAccountId;
+        const accountCurrency = (data.currency || '').toString().toUpperCase();
+        const accountStatus = (data.status || '').toString().toUpperCase();
+        const accountSubCustomerId = data.subCustomerId || subCustomerId;
+
+        if (!accountId || !accountSubCustomerId) {
+          console.warn(
+            `[Webhook] Account status event ${eventId} lacks an account or sub-customer id; skipping.`
+          );
+        } else {
+          const owner = await tx.user.findFirst({
+            where: { wewireSubcustomerId: accountSubCustomerId },
+          });
+
+          if (!owner) {
+            console.warn(
+              `[Webhook] No user holds sub-customer ${accountSubCustomerId} for event ${eventId}.`
+            );
+          } else {
+            // Accounts are per-currency, so bind to the wallet of that currency.
+            const wallet = await tx.wallet.findFirst({
+              where: {
+                userId: owner.id,
+                currency: accountCurrency || DEFAULT_WALLET_CURRENCY,
+              },
+            });
+
+            if (!wallet) {
+              console.warn(
+                `[Webhook] User ${owner.id} has no ${accountCurrency} wallet to attach account ${accountId} to.`
+              );
+            } else if (accountStatus === 'ACTIVE') {
+              await tx.wallet.update({
+                where: { id: wallet.id },
+                data: { wewireAccountId: accountId },
+              });
+              console.log(
+                `[Webhook] Virtual account ${accountId} is ACTIVE for user ${owner.id} (${wallet.currency}).`
+              );
+            } else if (
+              ['DENIED', 'CLOSED', 'SUSPENDED'].includes(accountStatus)
+            ) {
+              // Stop pointing at an account that can no longer receive money.
+              if (wallet.wewireAccountId === accountId) {
+                await tx.wallet.update({
+                  where: { id: wallet.id },
+                  data: { wewireAccountId: null },
+                });
+              }
+              console.warn(
+                `[Webhook] Virtual account ${accountId} is ${accountStatus} for user ${owner.id}; detached.`
+              );
+            } else {
+              console.log(
+                `[Webhook] Virtual account ${accountId} is ${accountStatus} for user ${owner.id}; still provisioning.`
+              );
+            }
+          }
         }
       }
 

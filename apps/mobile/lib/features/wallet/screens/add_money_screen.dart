@@ -488,12 +488,34 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
                     resp.fundingTransactionId.substring(0, 8),
                   ),
                 ],
-                if (account?.accountNumber != null) ...[
+                // US accounts are addressed by account/routing number, EUR and
+                // GBP ones by IBAN and BIC, so show whichever the issuer gave.
+                if (account?.hasLocalNumbers ?? false) ...[
                   const Divider(color: AppColors.hairlineSoft, height: 16),
                   _buildSummaryRow(
                     'Virtual Account',
-                    '${account!.bankName} (${account.accountNumber})',
+                    [
+                      account!.bankName,
+                      if (account.accountNumber != null)
+                        '(${account.accountNumber})',
+                    ].whereType<String>().join(' '),
                   ),
+                  if (account.routingNumber != null) ...[
+                    const Divider(color: AppColors.hairlineSoft, height: 16),
+                    _buildSummaryRow('Routing Number', account.routingNumber!),
+                  ],
+                  if (account.sortCode != null) ...[
+                    const Divider(color: AppColors.hairlineSoft, height: 16),
+                    _buildSummaryRow('Sort Code', account.sortCode!),
+                  ],
+                ] else if (account?.hasIban ?? false) ...[
+                  const Divider(color: AppColors.hairlineSoft, height: 16),
+                  if (account!.iban != null)
+                    _buildSummaryRow('IBAN', account.iban!),
+                  if (account.bic != null) ...[
+                    const Divider(color: AppColors.hairlineSoft, height: 16),
+                    _buildSummaryRow('BIC', account.bic!),
+                  ],
                 ],
               ],
             ),
@@ -501,7 +523,12 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
 
           const SizedBox(height: 24),
 
-          // Instant simulate deposit button
+          // Instant simulate deposit button.
+          //
+          // With a real WeWire account behind this top-up the deposit goes
+          // through their sandbox and the wallet is credited by the pay-in
+          // webhook. Without one there is nothing to deposit into, so it falls
+          // back to crediting the local ledger directly.
           if (resp != null) ...[
             SizedBox(
               width: double.infinity,
@@ -509,13 +536,18 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
               child: ElevatedButton.icon(
                 key: const Key('simulate_deposit_now_button'),
                 onPressed: () {
-                  ref
-                      .read(topupControllerProvider.notifier)
-                      .confirmTopup(resp.fundingTransactionId);
+                  final notifier = ref.read(topupControllerProvider.notifier);
+                  if (resp.isWeWireBacked) {
+                    notifier.simulateWeWireDeposit(resp.fundingTransactionId);
+                  } else {
+                    notifier.confirmTopup(resp.fundingTransactionId);
+                  }
                 },
                 icon: const Icon(Icons.bolt, size: 20),
                 label: Text(
-                  '⚡ Simulate Instant Deposit (${_currency.format(state.amount)})',
+                  resp.isWeWireBacked
+                      ? 'Simulate Bank Deposit (${_currency.format(state.amount)})'
+                      : '⚡ Simulate Instant Deposit (${_currency.format(state.amount)})',
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,

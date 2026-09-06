@@ -209,6 +209,10 @@ class VerifyingPaymentRepository extends MockPaymentRepository {
 }
 
 class StubWalletRepository implements WalletRepository {
+  /// Last funding transaction a WeWire sandbox deposit was requested for.
+  String? simulatedDepositFor;
+
+
   final double usdBalance;
 
   StubWalletRepository({this.usdBalance = 500.0});
@@ -256,6 +260,11 @@ class StubWalletRepository implements WalletRepository {
         state: DepositAccountState.ready,
         currency: 'USD',
       );
+
+  @override
+  Future<void> simulateWeWireDeposit(String fundingTransactionId) async {
+    simulatedDepositFor = fundingTransactionId;
+  }
 }
 
 TransactionModel payoutTo(

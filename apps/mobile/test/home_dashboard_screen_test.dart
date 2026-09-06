@@ -51,6 +51,10 @@ class TestMockAuthRepository implements AuthRepository {
 }
 
 class TestMockWalletRepository implements WalletRepository {
+  /// Last funding transaction a WeWire sandbox deposit was requested for.
+  String? simulatedDepositFor;
+
+
   final List<WalletBalanceModel> balances;
   final bool failOnBalances;
   TestMockWalletRepository({List<WalletBalanceModel>? balances, this.failOnBalances = false})
@@ -101,6 +105,11 @@ class TestMockWalletRepository implements WalletRepository {
         state: DepositAccountState.ready,
         currency: 'USD',
       );
+
+  @override
+  Future<void> simulateWeWireDeposit(String fundingTransactionId) async {
+    simulatedDepositFor = fundingTransactionId;
+  }
 }
 
 class TestMockTravelRepository implements TravelRepository {

@@ -16,6 +16,10 @@ import 'package:vesspay/features/wallet/providers/wallet_providers.dart';
 import 'package:vesspay/features/wallet/repositories/wallet_repository.dart';
 
 class FakeWalletRepository implements WalletRepository {
+  /// Last funding transaction a WeWire sandbox deposit was requested for.
+  String? simulatedDepositFor;
+
+
   String? savedCurrency;
   int setCurrencyCalls = 0;
   bool failOnSet = false;
@@ -71,6 +75,11 @@ class FakeWalletRepository implements WalletRepository {
         state: DepositAccountState.ready,
         currency: 'USD',
       );
+
+  @override
+  Future<void> simulateWeWireDeposit(String fundingTransactionId) async {
+    simulatedDepositFor = fundingTransactionId;
+  }
 }
 
 class FakeAuthRepository implements AuthRepository {
