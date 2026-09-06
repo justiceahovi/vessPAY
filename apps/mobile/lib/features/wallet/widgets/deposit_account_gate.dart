@@ -28,6 +28,7 @@ class DepositAccountGate extends ConsumerStatefulWidget {
 
 class _DepositAccountGateState extends ConsumerState<DepositAccountGate> {
   bool _isSubmitting = false;
+  bool _autoProvisionTried = false;
   String? _selected;
   String? _error;
   Timer? _poll;
@@ -97,6 +98,15 @@ class _DepositAccountGateState extends ConsumerState<DepositAccountGate> {
 
     switch (account.state) {
       case DepositAccountState.provisioning:
+        // No account id means nothing has been requested yet: everything the
+        // issuer needs is on file, so ask for it rather than polling a state
+        // that will never change on its own.
+        if (account.accountId == null && !_autoProvisionTried) {
+          _autoProvisionTried = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _provision();
+          });
+        }
         _ensurePolling();
         return _shell(
           _GateMessage(

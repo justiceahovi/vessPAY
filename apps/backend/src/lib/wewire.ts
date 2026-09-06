@@ -353,6 +353,18 @@ export async function getHostedKycLink(
   };
 }
 
+export class WeWireApiError extends Error {
+  readonly status: number;
+  readonly code: string | null;
+
+  constructor(message: string, status: number, code: string | null) {
+    super(message);
+    this.name = 'WeWireApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
 /**
  * Retrieves the current sub-customer status from WeWire.
  * Endpoint: GET /v1/subcustomers/{subCustomerId}
@@ -379,10 +391,27 @@ export async function getSubCustomerStatus(
     },
   });
 
-  const data: any = await res.json();
-  if (!res.ok) {
-    const errMsg = data?.error?.message || data?.message || JSON.stringify(data);
-    throw new Error(`Failed to retrieve sub-customer status: ${errMsg}`);
+  // The gateway returns an HTML error page when the sandbox is down, so parse
+  // defensively: res.json() on "<html>..." throws a SyntaxError that would
+  // otherwise surface as an opaque 500 from every caller.
+  const text = await res.text();
+  let data: any;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
+  }
+
+  if (!res.ok || data === null) {
+    const errMsg =
+      data?.error?.message ||
+      data?.message ||
+      `WeWire returned a non-JSON ${res.status} response`;
+    throw new WeWireApiError(
+      `Failed to retrieve sub-customer status: ${errMsg}`,
+      res.status,
+      data?.error?.code || null
+    );
   }
 
   return {
@@ -1061,18 +1090,6 @@ function wewireConfig(): { apiKey: string; baseUrl: string } | null {
     process.env.WEWIRE_BASE_URL || 'https://stage-capi.wewireafrica.com'
   ).replace(/\/$/, '');
   return { apiKey, baseUrl };
-}
-
-export class WeWireApiError extends Error {
-  readonly status: number;
-  readonly code: string | null;
-
-  constructor(message: string, status: number, code: string | null) {
-    super(message);
-    this.name = 'WeWireApiError';
-    this.status = status;
-    this.code = code;
-  }
 }
 
 /** Single place for the request/parse/error shape every WeWire call shares. */
