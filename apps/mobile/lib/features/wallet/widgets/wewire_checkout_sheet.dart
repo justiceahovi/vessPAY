@@ -118,6 +118,12 @@ class _WeWireCheckoutSheetState extends ConsumerState<WeWireCheckoutSheet> {
 
     final isUs = _selectedRail == TransferRail.usDomestic;
 
+    // A real issued account replaces the demo rails entirely.
+    final details = widget.response.accountDetails;
+    final isRealAccount = widget.response.isWeWireBacked &&
+        details != null &&
+        (details.hasLocalNumbers || details.hasIban);
+
     return Container(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.90,
@@ -215,8 +221,10 @@ class _WeWireCheckoutSheetState extends ConsumerState<WeWireCheckoutSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Segmented Rail Switcher (ACH / Wire vs SWIFT)
-                    Container(
+                    // Segmented Rail Switcher (ACH / Wire vs SWIFT).
+                    // A real issued account has one set of details and its own
+                    // rails, so the switcher only applies to the demo fallback.
+                    if (!isRealAccount) Container(
                       height: 40,
                       padding: const EdgeInsets.all(3),
                       decoration: BoxDecoration(
@@ -243,7 +251,7 @@ class _WeWireCheckoutSheetState extends ConsumerState<WeWireCheckoutSheet> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    if (!isRealAccount) const SizedBox(height: 16),
 
                     // Copyable Account Details Card
                     Container(
@@ -254,33 +262,46 @@ class _WeWireCheckoutSheetState extends ConsumerState<WeWireCheckoutSheet> {
                         border: Border.all(color: AppColors.hairline),
                       ),
                       child: Column(
-                        children: [
-                          _buildCopyableRow(
-                            'Bank Name',
-                            isUs ? 'Evolve Bank & Trust' : 'Standard Chartered Bank',
-                          ),
-                          const Divider(color: AppColors.hairlineSoft, height: 16),
-                          _buildCopyableRow(
-                            isUs ? 'Routing Number (ABA)' : 'SWIFT / BIC Code',
-                            isUs ? '021000021' : 'SCBLSG22XXX',
-                          ),
-                          const Divider(color: AppColors.hairlineSoft, height: 16),
-                          _buildCopyableRow('Account Number', '0100892209'),
-                          const Divider(color: AppColors.hairlineSoft, height: 16),
-                          _buildCopyableRow('Account Name', 'WeWire Technologies Inc.'),
-                          const Divider(color: AppColors.hairlineSoft, height: 16),
-                          _buildCopyableRow(
-                            'Reference / Memo',
-                            reference,
-                            isHighlighted: true,
-                          ),
-                        ],
+                        children: isRealAccount
+                            ? _buildIssuedAccountRows(details)
+                            : [
+                                _buildCopyableRow(
+                                  'Bank Name',
+                                  isUs
+                                      ? 'Evolve Bank & Trust'
+                                      : 'Standard Chartered Bank',
+                                ),
+                                const Divider(
+                                    color: AppColors.hairlineSoft, height: 16),
+                                _buildCopyableRow(
+                                  isUs
+                                      ? 'Routing Number (ABA)'
+                                      : 'SWIFT / BIC Code',
+                                  isUs ? '021000021' : 'SCBLSG22XXX',
+                                ),
+                                const Divider(
+                                    color: AppColors.hairlineSoft, height: 16),
+                                _buildCopyableRow(
+                                    'Account Number', '0100892209'),
+                                const Divider(
+                                    color: AppColors.hairlineSoft, height: 16),
+                                _buildCopyableRow(
+                                    'Account Name', 'WeWire Technologies Inc.'),
+                                const Divider(
+                                    color: AppColors.hairlineSoft, height: 16),
+                                _buildCopyableRow(
+                                  'Reference / Memo',
+                                  reference,
+                                  isHighlighted: true,
+                                ),
+                              ],
                       ),
                     ),
                     const SizedBox(height: 14),
 
-                    // Important Reference Note
-                    Container(
+                    // Important Reference Note. Only the shared demo account
+                    // needs one; an issued virtual account self-attributes.
+                    if (!isRealAccount) Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: const Color(0xFFFFFBEB),
@@ -544,6 +565,32 @@ class _WeWireCheckoutSheetState extends ConsumerState<WeWireCheckoutSheet> {
         ),
       ),
     );
+  }
+
+  /// Renders whatever identifiers the issuer actually returned: account plus
+  /// sort code and IBAN for GBP/EUR, account plus routing number for USD.
+  List<Widget> _buildIssuedAccountRows(TopupAccountDetails d) {
+    final rows = <Widget>[];
+
+    void add(String label, String? value, {bool highlight = false}) {
+      if (value == null || value.isEmpty) return;
+      if (rows.isNotEmpty) {
+        rows.add(const Divider(color: AppColors.hairlineSoft, height: 16));
+      }
+      rows.add(_buildCopyableRow(label, value, isHighlighted: highlight));
+    }
+
+    add('Bank Name', d.bankName);
+    add('Account Name', d.accountName);
+    add('Account Number', d.accountNumber, highlight: true);
+    add('Sort Code', d.sortCode);
+    add('Routing Number (ABA)', d.routingNumber);
+    add('IBAN', d.iban, highlight: d.accountNumber == null);
+    add('SWIFT / BIC', d.bic);
+    if (d.paymentRails.isNotEmpty) {
+      add('Payment Rails', d.paymentRails.join(' · '));
+    }
+    return rows;
   }
 
   Widget _buildCopyableRow(
