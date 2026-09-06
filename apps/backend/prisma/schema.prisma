@@ -25,6 +25,11 @@ model User {
   /// Wallet currency the user chose on first sign-on; null until they pick one.
   primaryCurrency     String?         @map("primary_currency")
   sourceOfFunds       String?         @map("source_of_funds")
+  /// Mirrors of the WeWire sub-customer's compliance state, kept current by
+  /// webhooks so the app need not call WeWire on every status read.
+  onboardingStatus    String?         @map("onboarding_status")
+  enhancedKycStatus   String?         @map("enhanced_kyc_status")
+  kycStatusUpdatedAt  DateTime?       @map("kyc_status_updated_at") @db.Timestamptz
   createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -33,6 +38,7 @@ model User {
   fundingTransactions FundingTransaction[]
   beneficiaries       Beneficiary[]
   transactions        Transaction[]
+  walletSweeps        WalletSweep[]
 
   @@map("users")
 }
@@ -84,6 +90,30 @@ model FundingTransaction {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("funding_transactions")
+}
+
+/// Audit trail of WeWire sweeping a sub-customer balance into the business
+/// wallet. It moves no user money — the ledger is already credited by the
+/// pay-in — but it is what reconciles that ledger against the business float.
+model WalletSweep {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId               String?  @map("user_id") @db.Uuid
+  subCustomerId        String   @map("sub_customer_id")
+  amount               Decimal  @db.Decimal(14, 2)
+  currency             String
+  direction            String   @default("AUTO")
+  fromWalletId         String?  @map("from_wallet_id")
+  toWalletId           String?  @map("to_wallet_id")
+  depositTransactionId String?  @unique @map("deposit_transaction_id")
+  debitTransactionId   String?  @map("debit_transaction_id")
+  creditTransactionId  String?  @map("credit_transaction_id")
+  sweptAt              DateTime @map("swept_at") @db.Timestamptz
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user                 User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([subCustomerId])
+  @@map("wallet_sweeps")
 }
 
 model WebhookEvent {

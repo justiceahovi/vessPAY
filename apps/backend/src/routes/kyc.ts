@@ -86,9 +86,28 @@ router.get('/status', authenticate, async (req: Request, res: Response): Promise
       return;
     }
 
-    const status = await getSubCustomerStatus(subCustomerId);
+    // WeWire pushes every KYC transition, so the mirrored state is normally
+    // current. Only reach for the API when nothing has been recorded yet.
+    let status = {
+      onboardingStatus: user.onboardingStatus,
+      enhancedKycStatus: user.enhancedKycStatus,
+    };
+
+    if (!status.onboardingStatus && !status.enhancedKycStatus) {
+      const live = await getSubCustomerStatus(subCustomerId);
+      status = {
+        onboardingStatus: live.onboardingStatus?.toUpperCase() ?? null,
+        enhancedKycStatus: live.enhancedKycStatus?.toUpperCase() ?? null,
+      };
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { ...status, kycStatusUpdatedAt: new Date() },
+      });
+    }
+
     res.status(200).json({
-      ...status,
+      onboardingStatus: status.onboardingStatus ?? 'DRAFT',
+      enhancedKycStatus: status.enhancedKycStatus ?? 'NOT_STARTED',
       demoKycAvailable: isDemoKycEnabled(),
     });
   } catch (err: any) {
@@ -142,7 +161,18 @@ router.post('/demo-submit', authenticate, async (req: Request, res: Response): P
       return;
     }
 
+    // A submission changes state right now, so read it back and re-seed the
+    // mirror rather than waiting for the webhook to catch up.
     const status = await getSubCustomerStatus(subCustomerId);
+    await prisma.user.update({
+      where: { id: req.user!.id },
+      data: {
+        onboardingStatus: status.onboardingStatus?.toUpperCase() ?? null,
+        enhancedKycStatus: status.enhancedKycStatus?.toUpperCase() ?? null,
+        kycStatusUpdatedAt: new Date(),
+      },
+    });
+
     res.status(200).json({
       ...status,
       demoKycAvailable: true,

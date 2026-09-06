@@ -431,6 +431,93 @@ router.post('/wewire', async (req: Request, res: Response): Promise<void> => {
         }
       }
 
+      // 4d. Compliance state. WeWire pushes every KYC transition, so mirror it
+      // locally: the deposit gate can then read our own database instead of
+      // calling WeWire on every poll.
+      const isKycUpdate =
+        eventType === 'subcustomer.kyc_status_updated' ||
+        eventType === 'subcustomer.enhanced_kyc_status_updated';
+
+      if (isKycUpdate) {
+        const kycSubCustomerId = data.subCustomerId || subCustomerId;
+        if (!kycSubCustomerId) {
+          console.warn(`[Webhook] KYC event ${eventId} has no sub-customer id.`);
+        } else {
+          const owner = await tx.user.findFirst({
+            where: { wewireSubcustomerId: kycSubCustomerId },
+          });
+
+          if (!owner) {
+            console.warn(
+              `[Webhook] No user holds sub-customer ${kycSubCustomerId} for KYC event ${eventId}.`
+            );
+          } else {
+            // Each event carries only the status it is about, so update the
+            // field it reports and leave the other as it stands.
+            const updates: Record<string, unknown> = {
+              kycStatusUpdatedAt: new Date(),
+            };
+            if (typeof data.onboardingStatus === 'string') {
+              updates.onboardingStatus = data.onboardingStatus.toUpperCase();
+            }
+            if (typeof data.enhancedKycStatus === 'string') {
+              updates.enhancedKycStatus = data.enhancedKycStatus.toUpperCase();
+            }
+
+            await tx.user.update({ where: { id: owner.id }, data: updates });
+            console.log(
+              `[Webhook] KYC state for user ${owner.id} updated: ${JSON.stringify(updates)}`
+            );
+          }
+        }
+      }
+
+      // 4e. Sweeps move the settled balance from the sub-customer wallet into
+      // the business float. No user money changes hands — the ledger is already
+      // credited by the pay-in — so this is recorded purely for reconciliation.
+      if (eventType === 'subcustomer.wallet.swept') {
+        const sweepSubCustomerId = data.subCustomerId || subCustomerId;
+        const depositTransactionId = data.depositTransactionId || null;
+
+        if (!sweepSubCustomerId) {
+          console.warn(`[Webhook] Sweep event ${eventId} has no sub-customer id.`);
+        } else {
+          const owner = await tx.user.findFirst({
+            where: { wewireSubcustomerId: sweepSubCustomerId },
+          });
+
+          // A sweep is identified by the deposit it settles, so a redelivery
+          // updates the same row rather than duplicating the audit trail.
+          const record = {
+            userId: owner?.id ?? null,
+            subCustomerId: sweepSubCustomerId,
+            amount: Number(data.amount ?? 0),
+            currency: (data.currency || 'USD').toString().toUpperCase(),
+            direction: (data.direction || 'AUTO').toString().toUpperCase(),
+            fromWalletId: data.fromWalletId ?? null,
+            toWalletId: data.toWalletId ?? null,
+            depositTransactionId,
+            debitTransactionId: data.debitTransactionId ?? null,
+            creditTransactionId: data.creditTransactionId ?? null,
+            sweptAt: data.sweptAt ? new Date(data.sweptAt) : new Date(),
+          };
+
+          if (depositTransactionId) {
+            await tx.walletSweep.upsert({
+              where: { depositTransactionId },
+              create: record,
+              update: record,
+            });
+          } else {
+            await tx.walletSweep.create({ data: record });
+          }
+
+          console.log(
+            `[Webhook] Recorded sweep of ${record.amount} ${record.currency} for sub-customer ${sweepSubCustomerId}.`
+          );
+        }
+      }
+
       // Mark webhook event record as processed
       await tx.webhookEvent.update({
         where: { id: webhookRecord.id },

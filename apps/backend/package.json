@@ -15,6 +15,7 @@
     "test:middleware": "tsx scripts/test-middleware.ts",
     "test:travel": "tsx scripts/test-travel.ts",
     "test:wallet": "tsx scripts/test-wallet.ts",
+    "test:kyc-sweep-webhooks": "tsx scripts/test-kyc-sweep-webhooks.ts",
     "test:settled-amount": "tsx scripts/test-settled-amount.ts",
     "test:wallet-currency": "tsx scripts/test-wallet-currency.ts",
     "test:subcustomer": "tsx scripts/test-subcustomer.ts",

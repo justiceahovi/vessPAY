@@ -85,8 +85,24 @@ export async function getDepositAccountStatus(
     where: { userId, currency },
   });
 
-  const kyc = await getSubCustomerStatus(user.wewireSubcustomerId);
-  if (!isEnhancedApproved(kyc.enhancedKycStatus)) {
+  // Prefer the locally mirrored state kept current by WeWire's KYC webhooks.
+  // Only ask WeWire directly when we have never been told anything, which
+  // keeps a polling deposit screen off their API entirely.
+  let enhancedKycStatus = user.enhancedKycStatus;
+  if (!enhancedKycStatus) {
+    const kyc = await getSubCustomerStatus(user.wewireSubcustomerId);
+    enhancedKycStatus = kyc.enhancedKycStatus;
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        onboardingStatus: kyc.onboardingStatus?.toUpperCase() ?? null,
+        enhancedKycStatus: kyc.enhancedKycStatus?.toUpperCase() ?? null,
+        kycStatusUpdatedAt: new Date(),
+      },
+    });
+  }
+
+  if (!isEnhancedApproved(enhancedKycStatus)) {
     let kycLinkUrl: string | null = null;
     try {
       kycLinkUrl = (await getHostedKycLink(user.wewireSubcustomerId)).url;
