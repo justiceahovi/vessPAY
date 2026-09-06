@@ -3,26 +3,17 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/navigation/main_app_bar.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../auth/repositories/auth_repository.dart';
+import '../../pay/models/transaction_model.dart';
 import '../../pay/providers/recent_activity_provider.dart';
 import '../../travel/providers/travel_providers.dart';
-import '../../travel/screens/destination_selection_screen.dart';
 import '../../wallet/models/wallet_balance_model.dart';
 import '../../wallet/models/wallet_currency_model.dart';
 import '../../wallet/providers/currency_providers.dart';
 import '../../wallet/providers/wallet_providers.dart';
 import '../../wallet/screens/wallet_currency_selection_screen.dart';
-
-/// Provider for user profile data on Home dashboard
-final homeUserProfileProvider = FutureProvider((ref) async {
-  try {
-    return await ref.watch(authRepositoryProvider).getProfile();
-  } catch (_) {
-    return null;
-  }
-});
 
 /// High-End Fintech Home Dashboard Screen strictly adhering to DESIGN.md
 /// featuring the modern banking layout with quick transactions and activity feed.
@@ -77,8 +68,11 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close,
-                          size: 20, color: AppColors.muted),
+                      icon: const Icon(
+                        Icons.close,
+                        size: 20,
+                        color: AppColors.muted,
+                      ),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
@@ -93,8 +87,10 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   ),
                   child: Row(
                     children: [
-                      Text('${walletCurrency.flag} ➔ 🇬🇭',
-                          style: const TextStyle(fontSize: 20)),
+                      Text(
+                        '${walletCurrency.flag} ➔ 🇬🇭',
+                        style: const TextStyle(fontSize: 20),
+                      ),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
@@ -122,7 +118,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.surfaceStrong,
                           borderRadius: BorderRadius.circular(100),
@@ -164,222 +162,19 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
-  void _showHelpBottomSheet(BuildContext context) {
-    HapticFeedback.lightImpact();
-    showModalBottomSheet(
-      context: context,
-      useRootNavigator: true,
-      backgroundColor: AppColors.canvas,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Help & Support',
-                      style: GoogleFonts.inter(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.ink,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close,
-                          size: 20, color: AppColors.muted),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                ListTile(
-                  leading: const Icon(Icons.chat_bubble_outline_rounded,
-                      color: AppColors.primary),
-                  title: const Text('24/7 Traveler Support Chat',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: const Text('Connect with a live support specialist'),
-                  onTap: () => Navigator.pop(context),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.help_outline_rounded,
-                      color: AppColors.primary),
-                  title: const Text('African Corridor FAQs',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: const Text('Learn about local rails, rates & MoMo'),
-                  onTap: () => Navigator.pop(context),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.report_problem_outlined,
-                      color: AppColors.primary),
-                  title: const Text('Report Transaction Issue',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: const Text('Check transaction ID resolution'),
-                  onTap: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showNotificationsBottomSheet(BuildContext context) {
-    HapticFeedback.lightImpact();
-    showModalBottomSheet(
-      context: context,
-      useRootNavigator: true,
-      backgroundColor: AppColors.canvas,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return Consumer(
-          builder: (context, ref, _) {
-            final notifications = ref.watch(dynamicNotificationsProvider);
-
-            return SafeArea(
-              child: SingleChildScrollView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Notifications',
-                          style: GoogleFonts.inter(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.ink,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close,
-                              size: 20, color: AppColors.muted),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    if (notifications.isEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 24),
-                        child: Center(
-                          child: Column(
-                            children: [
-                              Container(
-                                width: 44,
-                                height: 44,
-                                decoration: const BoxDecoration(
-                                  color: AppColors.surfaceSoft,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.notifications_none_rounded,
-                                  color: AppColors.muted,
-                                  size: 22,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                'No notifications yet',
-                                style: GoogleFonts.inter(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.ink,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ] else ...[
-                      for (int i = 0; i < notifications.length; i++) ...[
-                        if (i > 0)
-                          const Divider(height: 1, color: AppColors.hairlineSoft),
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: notifications[i]
-                                  .iconColor
-                                  .withValues(alpha: 0.12),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              notifications[i].icon,
-                              color: notifications[i].iconColor,
-                              size: 20,
-                            ),
-                          ),
-                          title: Text(
-                            notifications[i].title,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          subtitle: Text(
-                            notifications[i].subtitle,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.muted,
-                            ),
-                          ),
-                          trailing: Text(
-                            notifications[i].time,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.muted,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final balancesAsync = ref.watch(walletBalancesProvider);
     final ghsRate = ref.watch(walletToGhsRateProvider);
     final walletCurrency = ref.watch(activeWalletCurrencyProvider);
-    final userAsync = ref.watch(homeUserProfileProvider);
     final travelProfile = ref.watch(currentTravelProfileProvider).valueOrNull;
-
-    final user = userAsync.valueOrNull;
-    final userName = (user != null &&
-            (user.firstName.isNotEmpty || user.lastName.isNotEmpty))
-        ? '${user.firstName} ${user.lastName}'.trim()
-        : 'Hello...';
 
     final flagEmoji = travelProfile?.flagEmoji ?? '🇬🇭';
 
     return Scaffold(
       key: const Key('home_screen'),
       backgroundColor: AppColors.surfaceSubtle,
+      appBar: const MainAppBar(),
       body: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.dark.copyWith(
           statusBarColor: Colors.transparent,
@@ -402,7 +197,6 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   // Top Clean Header
                   _buildTopHeader(
                     context: context,
-                    userName: userName,
                     flagEmoji: flagEmoji,
                     balancesAsync: balancesAsync,
                     ghsRate: ghsRate,
@@ -415,8 +209,6 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         const SizedBox(height: 16),
-
-
 
                         // YOUR ACTIVITY Section
                         _buildActivitySection(context),
@@ -433,11 +225,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
-  /// Top modern minimalist header containing profile avatar, user name, flag,
-  /// accounts title row, and the Savings Account hero card.
+  /// Top header carrying the Savings Account hero card beneath the app bar.
   Widget _buildTopHeader({
     required BuildContext context,
-    required String userName,
     required String flagEmoji,
     required AsyncValue<List<WalletBalanceModel>> balancesAsync,
     required double ghsRate,
@@ -445,162 +235,10 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
   }) {
     return Container(
       color: AppColors.canvas,
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 8,
-        bottom: 16,
-        left: 18,
-        right: 18,
-      ),
+      padding: const EdgeInsets.only(top: 4, bottom: 16, left: 18, right: 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Row 1: Avatar | User Greeting / VessPay Home | Actions | Country Flag Selector
-          Row(
-            children: [
-              // Avatar (Taps for profile & more options)
-              InkWell(
-                key: const Key('home_avatar_button'),
-                onTap: () => context.push(AppRoutes.profile),
-                borderRadius: BorderRadius.circular(100),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceTint,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.15),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.person_outline_rounded,
-                      color: AppColors.primary,
-                      size: 22,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-
-              // User Greeting & VessPay Home identifier
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      userName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.ink,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    const Text(
-                      'VessPay Home',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.muted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Quick Notification Icon
-              InkWell(
-                key: const Key('header_notifications_button'),
-                onTap: () => _showNotificationsBottomSheet(context),
-                borderRadius: BorderRadius.circular(100),
-                child: Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceSoft,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: AppColors.hairlineSubtle,
-                      width: 1.0,
-                    ),
-                  ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.notifications_none_rounded,
-                      size: 19,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-
-              // Quick Help Icon
-              InkWell(
-                key: const Key('header_help_button'),
-                onTap: () => _showHelpBottomSheet(context),
-                borderRadius: BorderRadius.circular(100),
-                child: Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceSoft,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: AppColors.hairlineSubtle,
-                      width: 1.0,
-                    ),
-                  ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.help_outline_rounded,
-                      size: 19,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-
-              // Country Flag & Corridor Dropdown
-              InkWell(
-                onTap: () =>
-                    DestinationSelectionScreen.showAsBottomSheet(context),
-                borderRadius: BorderRadius.circular(100),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceSoft,
-                    borderRadius: BorderRadius.circular(100),
-                    border: Border.all(
-                      color: AppColors.hairlineSubtle,
-                      width: 1.0,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(flagEmoji, style: const TextStyle(fontSize: 16)),
-                      const SizedBox(width: 3),
-                      const Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 16,
-                        color: AppColors.muted,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-
           // Savings Account / Travel Wallet Card
           balancesAsync.when(
             data: (balances) {
@@ -609,7 +247,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               final primaryBalance = balances.firstWhere(
                 (b) => b.currency.toUpperCase() == walletCurrency.code,
                 orElse: () => WalletBalanceModel(
-                    currency: walletCurrency.code, balance: 0.0),
+                  currency: walletCurrency.code,
+                  balance: 0.0,
+                ),
               );
 
               final walletAmount = primaryBalance.balance;
@@ -656,16 +296,10 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF0E1117),
-                Color(0xFF181C24),
-              ],
+              colors: [Color(0xFF0E1117), Color(0xFF181C24)],
             ),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: const Color(0xFF282D37),
-              width: 1.0,
-            ),
+            border: Border.all(color: const Color(0xFF282D37), width: 1.0),
             boxShadow: [
               BoxShadow(
                 color: AppColors.ink.withValues(alpha: 0.12),
@@ -684,7 +318,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(100),
@@ -768,18 +404,25 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.surfaceDarkElevated,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: AppColors.hairlineSoft.withValues(alpha: 0.1),
+                            color: AppColors.hairlineSoft.withValues(
+                              alpha: 0.1,
+                            ),
                             width: 1.0,
                           ),
                         ),
                         child: Row(
                           children: [
-                            Text(flagEmoji, style: const TextStyle(fontSize: 16)),
+                            Text(
+                              flagEmoji,
+                              style: const TextStyle(fontSize: 16),
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Column(
@@ -789,7 +432,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                                     _hideBalance
                                         ? '≈ $currencySymbol ••••••••'
                                         : '≈ $currencySymbol ${ghsAmount.toStringAsFixed(2)}',
-                                    key: const Key('wallet_ghs_equivalent_text'),
+                                    key: const Key(
+                                      'wallet_ghs_equivalent_text',
+                                    ),
                                     style: GoogleFonts.jetBrainsMono(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w500,
@@ -827,7 +472,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         onTap: () {
                           HapticFeedback.lightImpact();
                           WalletCurrencySelectionScreen.showAsBottomSheet(
-                              context);
+                            context,
+                          );
                         },
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
@@ -837,8 +483,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                             color: AppColors.surfaceDarkElevated,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color:
-                                  AppColors.hairlineSoft.withValues(alpha: 0.1),
+                              color: AppColors.hairlineSoft.withValues(
+                                alpha: 0.1,
+                              ),
                               width: 1.0,
                             ),
                           ),
@@ -933,11 +580,16 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     final secondary = ref.watch(secondaryWalletBalancesProvider);
     if (secondary.isEmpty) return const SizedBox.shrink();
 
-    final catalog = ref.watch(supportedWalletCurrenciesProvider).valueOrNull ??
+    final catalog =
+        ref.watch(supportedWalletCurrenciesProvider).valueOrNull ??
         kDefaultWalletCurrencies;
     final formatted = secondary
-        .map((b) => resolveWalletCurrency(b.currency, catalog: catalog)
-            .format(b.balance))
+        .map(
+          (b) => resolveWalletCurrency(
+            b.currency,
+            catalog: catalog,
+          ).format(b.balance),
+        )
         .join(' · ');
 
     return Padding(
@@ -958,10 +610,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   : 'You also hold $formatted',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.white60,
-              ),
+              style: const TextStyle(fontSize: 12, color: Colors.white60),
             ),
           ),
         ],
@@ -978,10 +627,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFF0E1117),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: const Color(0xFF282D37),
-          width: 1.0,
-        ),
+        border: Border.all(color: const Color(0xFF282D37), width: 1.0),
       ),
       child: Center(
         child: Column(
@@ -1016,8 +662,10 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               style: TextButton.styleFrom(
                 foregroundColor: Colors.white,
                 backgroundColor: Colors.white.withValues(alpha: 0.12),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 8,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(100),
                 ),
@@ -1039,10 +687,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFF0E1117),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: const Color(0xFF282D37),
-          width: 1.0,
-        ),
+        border: Border.all(color: const Color(0xFF282D37), width: 1.0),
       ),
       child: const Center(
         child: Text(
@@ -1053,13 +698,11 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
-
-
-
-
   /// Modern Minimalist YOUR ACTIVITY Feed Section
   Widget _buildActivitySection(BuildContext context) {
-    final activities = ref.watch(recentActivitiesProvider);
+    // Payments and deposits share this feed, so it is capped here; the full
+    // history lives behind "See All".
+    final activities = ref.watch(recentActivitiesProvider).take(5).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1095,10 +738,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
           decoration: BoxDecoration(
             color: AppColors.surfaceCard,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: AppColors.hairlineSubtle,
-              width: 1.0,
-            ),
+            border: Border.all(color: AppColors.hairlineSubtle, width: 1.0),
             boxShadow: [
               BoxShadow(
                 color: AppColors.ink.withValues(alpha: 0.02),
@@ -1110,26 +750,26 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
           child: activities.isEmpty
               ? _buildEmptyActivityState()
               : Column(
-            children: [
-              for (int i = 0; i < activities.length; i++) ...[
-                if (i > 0)
-                  const Divider(height: 1, color: AppColors.hairlineSoft),
-                _buildActivityRow(
-                  id: activities[i].id,
-                  icon: activities[i].icon,
-                  iconColor: activities[i].iconColor,
-                  iconBgColor: activities[i].iconBgColor,
-                  title: activities[i].title,
-                  subtitle: activities[i].subtitle,
-                  date: activities[i].date,
-                  amount: activities[i].amount,
-                  statusText: activities[i].statusText,
-                  statusColor: activities[i].statusColor,
-                  context: context,
+                  children: [
+                    for (int i = 0; i < activities.length; i++) ...[
+                      if (i > 0)
+                        const Divider(height: 1, color: AppColors.hairlineSoft),
+                      _buildActivityRow(
+                        transaction: activities[i].transaction,
+                        icon: activities[i].icon,
+                        iconColor: activities[i].iconColor,
+                        iconBgColor: activities[i].iconBgColor,
+                        title: activities[i].title,
+                        subtitle: activities[i].subtitle,
+                        date: activities[i].date,
+                        amount: activities[i].amount,
+                        statusText: activities[i].statusText,
+                        statusColor: activities[i].statusColor,
+                        context: context,
+                      ),
+                    ],
+                  ],
                 ),
-              ],
-            ],
-          ),
         ),
       ],
     );
@@ -1170,10 +810,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
           const Text(
             'Your transactions will appear here once you add money or make a payment.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              color: AppColors.muted,
-            ),
+            style: TextStyle(fontSize: 12, color: AppColors.muted),
           ),
         ],
       ),
@@ -1181,7 +818,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
   }
 
   Widget _buildActivityRow({
-    required String id,
+    required TransactionModel transaction,
     required IconData icon,
     required Color iconColor,
     required Color iconBgColor,
@@ -1194,92 +831,97 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     required BuildContext context,
   }) {
     return InkWell(
-      onTap: () => context.push(AppRoutes.transactionDetail, extra: id),
+      // Hand over the whole record: a deposit and a payout are fetched from
+      // different endpoints, so an id alone would cost a lookup to disambiguate.
+      onTap: () =>
+          context.push(AppRoutes.transactionDetail, extra: transaction),
       borderRadius: BorderRadius.circular(16),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: iconBgColor,
-              shape: BoxShape.circle,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: iconBgColor,
+                shape: BoxShape.circle,
+              ),
+              child: Center(child: Icon(icon, color: iconColor, size: 20)),
             ),
-            child: Center(
-              child: Icon(icon, color: iconColor, size: 20),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.muted,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    date,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.mutedSoft,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  title,
-                  style: GoogleFonts.inter(
+                  amount,
+                  style: GoogleFonts.jetBrainsMono(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: AppColors.ink,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.muted,
-                  ),
-                ),
                 const SizedBox(height: 4),
-                Text(
-                  date,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.mutedSoft,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    // Tinted from the status itself: a pending deposit must not
+                    // wear the same green as a settled one.
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    statusText,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: statusColor,
+                      letterSpacing: 0.4,
+                    ),
                   ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                amount,
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.ink,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceGreenTint,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  statusText,
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    color: statusColor,
-                    letterSpacing: 0.4,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/providers.dart';
+import '../../pay/models/transaction_model.dart';
 import '../models/deposit_account_model.dart';
 import '../models/topup_model.dart';
 import '../models/wallet_balance_model.dart';
@@ -32,6 +33,14 @@ abstract class WalletRepository {
   /// account. The wallet is credited by the resulting pay-in webhook, not by
   /// this call, so the caller has to wait for the balance rather than assume it.
   Future<void> simulateWeWireDeposit(String fundingTransactionId);
+
+  /// The user's deposits as unified transaction records, so the activity feed
+  /// can show money coming in next to money going out.
+  Future<List<TransactionModel>> getDeposits();
+
+  /// A single deposit by id, for opening one from a feed row that only carries
+  /// its identifier.
+  Future<TransactionModel> getDepositById(String id);
 }
 
 class ApiWalletRepository implements WalletRepository {
@@ -143,7 +152,30 @@ class ApiWalletRepository implements WalletRepository {
     );
   }
 
+  @override
+  Future<List<TransactionModel>> getDeposits() async {
+    return _apiClient.get<List<TransactionModel>>(
+      '/api/wallet/deposits',
+      fromJson: (data) {
+        if (data is List) {
+          return data
+              .map((item) =>
+                  TransactionModel.fromJson(item as Map<String, dynamic>))
+              .toList();
+        }
+        return <TransactionModel>[];
+      },
+    );
+  }
 
+  @override
+  Future<TransactionModel> getDepositById(String id) async {
+    return _apiClient.get<TransactionModel>(
+      '/api/wallet/deposits/$id',
+      fromJson: (data) =>
+          TransactionModel.fromJson(data as Map<String, dynamic>),
+    );
+  }
 }
 
 final walletRepositoryProvider = Provider<WalletRepository>((ref) {

@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/navigation/main_app_bar.dart';
 import '../../../../core/routing/app_routes.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../models/transaction_model.dart';
 import '../providers/recent_activity_provider.dart';
 
-/// Screen listing all user transactions grouped chronologically by date.
-/// Wired to GET /api/payments per T5.5 and VESSPAY_BLUEPRINT.md Section 7.
+/// Screen listing all user transactions grouped chronologically by date:
+/// payouts from GET /api/payments and deposits from GET /api/wallet/deposits,
+/// per T5.5 and VESSPAY_BLUEPRINT.md Section 7.
 class TransactionListScreen extends ConsumerWidget {
   final List<TransactionModel>? transactionsOverride;
 
-  const TransactionListScreen({
-    super.key,
-    this.transactionsOverride,
-  });
+  const TransactionListScreen({super.key, this.transactionsOverride});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -81,44 +80,16 @@ class TransactionListScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
-      appBar: _buildAppBar(context, ref),
+      appBar: _buildAppBar(),
       body: content,
     );
   }
 
-  PreferredSizeWidget _buildAppBar(BuildContext context, WidgetRef ref) {
-    return AppBar(
-      backgroundColor: AppColors.canvas,
-      elevation: 0,
-      leading: IconButton(
-        key: const Key('transactions_back_button'),
-        icon: const Icon(Icons.arrow_back, color: AppColors.ink),
-        onPressed: () {
-          if (Navigator.of(context).canPop()) {
-            Navigator.of(context).pop();
-          } else {
-            context.go(AppRoutes.home);
-          }
-        },
-      ),
-      title: const Text(
-        'Transactions',
-        key: Key('transactions_screen_title'),
-        style: TextStyle(
-          fontFamily: 'StyreneB',
-          fontSize: 17,
-          fontWeight: FontWeight.w600,
-          color: AppColors.ink,
-        ),
-      ),
-      centerTitle: true,
-      actions: [
-        IconButton(
-          key: const Key('transactions_refresh_button'),
-          icon: const Icon(Icons.refresh, color: AppColors.ink),
-          onPressed: () => ref.invalidate(userTransactionsProvider),
-        ),
-      ],
+  // Same header as Home and Profile; the list refreshes by pull-to-refresh.
+  PreferredSizeWidget _buildAppBar() {
+    return const MainAppBar(
+      subtitle: 'Transactions',
+      subtitleKey: Key('transactions_screen_title'),
     );
   }
 
@@ -179,7 +150,7 @@ class TransactionListScreen extends ConsumerWidget {
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 40),
           child: Text(
-            'When you send money with Pay Anyone or top up your wallet, your payments will appear here.',
+            'When you add money to your wallet or send money with Pay Anyone, it will appear here.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: 'StyreneB',
@@ -230,7 +201,9 @@ class TransactionListScreen extends ConsumerWidget {
               padding: const EdgeInsets.only(top: 16, bottom: 8, left: 4),
               child: Text(
                 dateHeader,
-                key: Key('date_group_${dateHeader.toLowerCase().replaceAll(' ', '_')}'),
+                key: Key(
+                  'date_group_${dateHeader.toLowerCase().replaceAll(' ', '_')}',
+                ),
                 style: const TextStyle(
                   fontFamily: 'StyreneB',
                   fontSize: 13,
@@ -273,19 +246,22 @@ class TransactionListScreen extends ConsumerWidget {
   }
 
   Widget _buildTransactionRow(BuildContext context, TransactionModel tx) {
-    final isPayout = tx.type == 'payout';
-    final sign = isPayout ? '-' : '+';
-    final amountText = '$sign ${tx.destinationCurrency} ${tx.destinationAmount.toStringAsFixed(2)}';
-    final usdTotal = tx.sourceAmount + tx.fee;
-    final usdSubtext = isPayout ? '\$${usdTotal.toStringAsFixed(2)} USD' : '';
+    final amountText = tx.signedDisplayAmount;
+    // A payout's second line is what it cost to send; a deposit's is the fee the
+    // rails took on the way in, and only when they took one.
+    final String usdSubtext;
+    if (tx.isDeposit) {
+      usdSubtext = tx.fee > 0
+          ? 'Fee ${tx.sourceCurrency} ${tx.fee.toStringAsFixed(2)}'
+          : '';
+    } else {
+      usdSubtext = '\$${(tx.sourceAmount + tx.fee).toStringAsFixed(2)} USD';
+    }
 
     return InkWell(
       key: Key('transaction_item_${tx.id}'),
       onTap: () {
-        context.push(
-          AppRoutes.transactionDetail,
-          extra: tx,
-        );
+        context.push(AppRoutes.transactionDetail, extra: tx);
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),

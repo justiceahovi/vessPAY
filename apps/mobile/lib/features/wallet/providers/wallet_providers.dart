@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers.dart';
+import '../../pay/providers/recent_activity_provider.dart';
 import '../models/deposit_account_model.dart';
 import '../models/topup_model.dart';
 import '../models/wallet_balance_model.dart';
@@ -162,6 +163,10 @@ class TopupNotifier extends StateNotifier<TopupState> {
         isPolling: true,
       );
 
+      // The deposit now exists as a pending record, so the activity feed has
+      // something new to show.
+      _ref.invalidate(userTransactionsProvider);
+
       // Start automatic polling loop for confirmation
       _startPolling(response.fundingTransactionId);
 
@@ -202,6 +207,8 @@ class TopupNotifier extends StateNotifier<TopupState> {
           );
           // Invalidate wallet balances so the entire app reflects the new balance immediately!
           _ref.invalidate(walletBalancesProvider);
+          // And the activity feed, so the deposit shows as settled.
+          _ref.invalidate(userTransactionsProvider);
         } else if (currentStatus.isFailed) {
           _stopPolling();
           state = state.copyWith(
@@ -209,6 +216,7 @@ class TopupNotifier extends StateNotifier<TopupState> {
             errorMessage: 'Funding transaction was declined or failed.',
             isPolling: false,
           );
+          _ref.invalidate(userTransactionsProvider);
         }
       } catch (_) {
         // Continue polling on transient errors

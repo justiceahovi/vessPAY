@@ -14,6 +14,8 @@ import 'package:vesspay/features/pay/repositories/payment_repository.dart';
 import 'package:vesspay/features/pay/screens/transaction_list_screen.dart';
 import 'package:vesspay/features/pay/screens/transaction_detail_screen.dart';
 import 'package:vesspay/features/pay/screens/payment_success_screen.dart';
+import 'package:vesspay/features/wallet/repositories/wallet_repository.dart';
+import 'support/fake_wallet_currency.dart';
 
 class MockPaymentRepository implements PaymentRepository {
   @override
@@ -160,6 +162,36 @@ void main() {
     createdAt: lastMonth,
   );
 
+  final sampleDepositToday = TransactionModel(
+    id: 'dep-today-1',
+    type: 'deposit',
+    status: 'COMPLETED',
+    sourceCurrency: 'USD',
+    sourceAmount: 250.0,
+    destinationCurrency: 'USD',
+    destinationAmount: 249.45,
+    settledAmount: 249.45,
+    fee: 0.55,
+    exchangeRate: 1.0,
+    vesspayReference: 'VP-DEP-ABC12345',
+    wewireReference: 'CHK-778899',
+    createdAt: today.add(const Duration(minutes: 5)),
+  );
+
+  final samplePendingDeposit = TransactionModel(
+    id: 'dep-pending-1',
+    type: 'deposit',
+    status: 'PENDING',
+    sourceCurrency: 'USD',
+    sourceAmount: 100.0,
+    destinationCurrency: 'USD',
+    destinationAmount: 100.0,
+    fee: 0.0,
+    exchangeRate: 1.0,
+    vesspayReference: 'VP-DEP-PEND0001',
+    createdAt: yesterday.add(const Duration(minutes: 5)),
+  );
+
   group('T5.7: Date Grouping Utilities', () {
     test('formatGroupingDate categorizes Today, Yesterday, and specific date correctly', () {
       expect(formatGroupingDate(today), 'Today');
@@ -285,12 +317,14 @@ void main() {
 
     testWidgets('Loads transaction by ID using transactionDetailProvider', (tester) async {
       final mockRepo = MockPaymentRepository();
+      final fakeWalletRepo = FakeCurrencyWalletRepository();
       mockRepo.detailTx = sampleTxYesterday;
 
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
             paymentRepositoryProvider.overrideWithValue(mockRepo),
+            walletRepositoryProvider.overrideWithValue(fakeWalletRepo),
           ],
           child: const MaterialApp(
             home: TransactionDetailScreen(
@@ -311,6 +345,7 @@ void main() {
   group('T5.7: Acceptance Criteria — Immediate Visibility After Success', () {
     testWidgets('Completed demo payment appears immediately in transaction list after success', (tester) async {
       final mockRepo = MockPaymentRepository();
+      final fakeWalletRepo = FakeCurrencyWalletRepository();
       mockRepo.transactions = [sampleTxYesterday]; // initially only yesterday's tx
 
       final router = GoRouter(
@@ -338,6 +373,7 @@ void main() {
         ProviderScope(
           overrides: [
             paymentRepositoryProvider.overrideWithValue(mockRepo),
+            walletRepositoryProvider.overrideWithValue(fakeWalletRepo),
           ],
           child: MaterialApp.router(
             routerConfig: router,
@@ -384,6 +420,7 @@ void main() {
 
     testWidgets('Tapping transaction row navigates to TransactionDetailScreen', (tester) async {
       final mockRepo = MockPaymentRepository();
+      final fakeWalletRepo = FakeCurrencyWalletRepository();
       mockRepo.transactions = [sampleTxToday];
 
       final router = GoRouter(
@@ -407,6 +444,7 @@ void main() {
         ProviderScope(
           overrides: [
             paymentRepositoryProvider.overrideWithValue(mockRepo),
+            walletRepositoryProvider.overrideWithValue(fakeWalletRepo),
           ],
           child: MaterialApp.router(
             routerConfig: router,
@@ -429,6 +467,7 @@ void main() {
 
     testWidgets('createAppRouter navigates correctly to transactionList and transactionDetail', (tester) async {
       final mockRepo = MockPaymentRepository();
+      final fakeWalletRepo = FakeCurrencyWalletRepository();
       mockRepo.detailTx = sampleTxToday;
 
       final router = createAppRouter(initialLocation: AppRoutes.transactionList);
@@ -437,6 +476,7 @@ void main() {
         ProviderScope(
           overrides: [
             paymentRepositoryProvider.overrideWithValue(mockRepo),
+            walletRepositoryProvider.overrideWithValue(fakeWalletRepo),
           ],
           child: MaterialApp.router(
             routerConfig: router,
@@ -452,6 +492,113 @@ void main() {
 
       expect(find.text('Transaction Details'), findsOneWidget);
       expect(find.text('Ama Serwaa'), findsOneWidget);
+    });
+  });
+
+  group('Deposits in the activity feed', () {
+    test('userTransactionsProvider merges payouts and deposits, newest first',
+        () async {
+      final mockRepo = MockPaymentRepository();
+      mockRepo.transactions = [sampleTxToday, sampleTxYesterday];
+      final fakeWalletRepo = FakeCurrencyWalletRepository();
+      fakeWalletRepo.deposits = [sampleDepositToday, samplePendingDeposit];
+
+      final container = ProviderContainer(
+        overrides: [
+          paymentRepositoryProvider.overrideWithValue(mockRepo),
+          walletRepositoryProvider.overrideWithValue(fakeWalletRepo),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final merged = await container.read(userTransactionsProvider.future);
+
+      expect(
+        merged.map((tx) => tx.id).toList(),
+        ['dep-today-1', 'tx-today-1', 'dep-pending-1', 'tx-yesterday-1'],
+      );
+    });
+
+    test('a deposit source failing still yields the payouts', () async {
+      final mockRepo = MockPaymentRepository();
+      mockRepo.transactions = [sampleTxToday];
+      final fakeWalletRepo = FakeCurrencyWalletRepository()
+        ..depositsThrow = true;
+
+      final container = ProviderContainer(
+        overrides: [
+          paymentRepositoryProvider.overrideWithValue(mockRepo),
+          walletRepositoryProvider.overrideWithValue(fakeWalletRepo),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final merged = await container.read(userTransactionsProvider.future);
+      expect(merged.map((tx) => tx.id).toList(), ['tx-today-1']);
+    });
+
+    testWidgets('Deposit rows read as money coming in', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: TransactionListScreen(
+              transactionsOverride: [
+                sampleDepositToday,
+                samplePendingDeposit,
+                sampleTxToday,
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Money added'), findsOneWidget);
+      expect(find.text('+ USD 249.45'), findsOneWidget);
+      expect(find.text('Fee USD 0.55'), findsOneWidget);
+
+      expect(find.text('Deposit in progress'), findsOneWidget);
+      expect(find.text('+ USD 100.00'), findsOneWidget);
+
+      // The payout it sits next to still reads as money going out.
+      expect(find.text('- GHS 150.00'), findsOneWidget);
+    });
+
+    testWidgets('Deposit detail shows the deposit breakdown, not a recipient',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: TransactionDetailScreen(transaction: sampleDepositToday),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Deposit Details'), findsOneWidget);
+      // The card header, and the transaction type in the references card.
+      expect(find.text('DEPOSIT'), findsNWidgets(2));
+      expect(find.text('RECIPIENT'), findsNothing);
+      expect(find.text('DEPOSIT BREAKDOWN'), findsOneWidget);
+      expect(find.byKey(const Key('detail_hero_amount')), findsOneWidget);
+      expect(find.text('+ USD 249.45'), findsOneWidget);
+      expect(find.text('Your USD wallet'), findsOneWidget);
+      expect(find.text('Credited to Wallet'), findsOneWidget);
+      expect(find.text('VP-DEP-ABC12345'), findsOneWidget);
+    });
+
+    testWidgets('A pending deposit is not reported as credited', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: TransactionDetailScreen(transaction: samplePendingDeposit),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Expected in Wallet'), findsOneWidget);
+      expect(find.text('Credited to Wallet'), findsNothing);
     });
   });
 }

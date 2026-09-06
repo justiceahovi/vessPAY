@@ -4,7 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 /// Transaction Model representing an individual payment or funding activity
 class TransactionModel {
   final String id;
-  final String type; // 'payout' | 'topup'
+  final String type; // 'payout' | 'deposit'
   final String status; // 'CREATED' | 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
   final String sourceCurrency;
   final double sourceAmount;
@@ -12,6 +12,9 @@ class TransactionModel {
   final double destinationAmount;
   final double fee;
   final double exchangeRate;
+
+  /// Deposits only: what the rails actually delivered, null while in flight.
+  final double? settledAmount;
   final String? recipientName;
   final String? recipientPhone;
   final String? network;
@@ -31,6 +34,7 @@ class TransactionModel {
     required this.destinationAmount,
     required this.fee,
     required this.exchangeRate,
+    this.settledAmount,
     this.recipientName,
     this.recipientPhone,
     this.network,
@@ -68,6 +72,8 @@ class TransactionModel {
       exchangeRate:
           (json['exchangeRate'] ?? json['exchange_rate'] ?? json['rate'] as num?)?.toDouble() ??
               1.0,
+      settledAmount:
+          (json['settledAmount'] ?? json['settled_amount'] as num?)?.toDouble(),
       recipientName: recipientMap?['name'] as String? ??
           json['recipientName'] as String? ??
           json['recipient_name'] as String?,
@@ -134,10 +140,25 @@ class TransactionModel {
     }
   }
 
+  /// Money coming into the wallet rather than leaving it. 'topup' is the older
+  /// name for the same thing and is still accepted from the backend.
+  bool get isDeposit => type == 'deposit' || type == 'topup';
+
+  /// What the wallet was actually credited, falling back to what the user sent
+  /// while the deposit is still in flight.
+  double get creditedAmount => settledAmount ?? destinationAmount;
+
   /// Presentation title
   String get displayTitle {
-    if (type == 'topup') {
-      return 'Load a Virtual Card';
+    if (isDeposit) {
+      switch (status.toUpperCase()) {
+        case 'FAILED':
+          return 'Deposit failed';
+        case 'COMPLETED':
+          return 'Money added';
+        default:
+          return 'Deposit in progress';
+      }
     }
     if (recipientName != null && recipientName!.isNotEmpty) {
       return 'Transfer to $recipientName';
@@ -150,8 +171,15 @@ class TransactionModel {
 
   /// Presentation subtitle
   String get displaySubtitle {
-    if (type == 'topup') {
-      return 'Reason: Card load verified';
+    if (isDeposit) {
+      switch (status.toUpperCase()) {
+        case 'FAILED':
+          return 'Deposit of $sourceCurrency ${sourceAmount.toStringAsFixed(2)} did not go through';
+        case 'COMPLETED':
+          return 'Credited to your $destinationCurrency wallet';
+        default:
+          return 'Awaiting your $sourceCurrency transfer';
+      }
     }
     if (recipientPhone != null && recipientPhone!.isNotEmpty) {
       return '${network ?? "MoMo"} payout to $recipientPhone';
@@ -162,6 +190,12 @@ class TransactionModel {
   /// Presentation amount
   String get displayAmount {
     return '$destinationCurrency ${destinationAmount.toStringAsFixed(2)}';
+  }
+
+  /// Presentation amount signed by direction: a deposit adds to the wallet,
+  /// a payout takes from it.
+  String get signedDisplayAmount {
+    return '${isDeposit ? '+' : '-'} $displayAmount';
   }
 
   /// Status badge color
@@ -192,8 +226,8 @@ class TransactionModel {
 
   /// Icon
   IconData get displayIcon {
-    if (type == 'topup') {
-      return Icons.credit_card_rounded;
+    if (isDeposit) {
+      return Icons.arrow_downward_rounded;
     }
     if (recipientName != null) {
       return Icons.swap_horiz_rounded;

@@ -101,6 +101,16 @@ class NavMockWalletRepository implements WalletRepository {
   Future<void> simulateWeWireDeposit(String fundingTransactionId) async {
     simulatedDepositFor = fundingTransactionId;
   }
+
+  /// Deposits this fake reports back into the activity feed.
+  List<TransactionModel> deposits = [];
+
+  @override
+  Future<List<TransactionModel>> getDeposits() async => deposits;
+
+  @override
+  Future<TransactionModel> getDepositById(String id) async =>
+      deposits.firstWhere((d) => d.id == id);
 }
 
 class NavMockTravelRepository implements TravelRepository {

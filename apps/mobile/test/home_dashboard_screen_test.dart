@@ -16,6 +16,7 @@ import 'package:vesspay/features/wallet/models/topup_model.dart';
 import 'package:vesspay/features/wallet/models/wallet_balance_model.dart';
 import 'package:vesspay/features/wallet/models/wallet_currency_model.dart';
 import 'package:vesspay/features/wallet/repositories/wallet_repository.dart';
+import 'package:vesspay/features/pay/models/transaction_model.dart';
 
 class TestMockAuthRepository implements AuthRepository {
   final UserModel? user;
@@ -107,6 +108,16 @@ class TestMockWalletRepository implements WalletRepository {
   Future<void> simulateWeWireDeposit(String fundingTransactionId) async {
     simulatedDepositFor = fundingTransactionId;
   }
+
+  /// Deposits this fake reports back into the activity feed.
+  List<TransactionModel> deposits = [];
+
+  @override
+  Future<List<TransactionModel>> getDeposits() async => deposits;
+
+  @override
+  Future<TransactionModel> getDepositById(String id) async =>
+      deposits.firstWhere((d) => d.id == id);
 }
 
 class TestMockTravelRepository implements TravelRepository {

@@ -125,9 +125,11 @@ class TransactionDetailScreen extends ConsumerWidget {
   }
 
   Widget _buildScaffold(BuildContext context, TransactionModel tx) {
+    final isDeposit = tx.isDeposit;
     final totalUsd = tx.sourceAmount + tx.fee;
     final recipientName = tx.recipientName ?? 'Recipient';
-    final vesspayRef = tx.vesspayReference ?? 'VP-PAY-${tx.id.substring(0, tx.id.length >= 8 ? 8 : tx.id.length).toUpperCase()}';
+    final fallbackPrefix = isDeposit ? 'VP-DEP' : 'VP-PAY';
+    final vesspayRef = tx.vesspayReference ?? '$fallbackPrefix-${tx.id.substring(0, tx.id.length >= 8 ? 8 : tx.id.length).toUpperCase()}';
     final wewireRef = tx.wewireReference;
 
     return Scaffold(
@@ -139,9 +141,9 @@ class TransactionDetailScreen extends ConsumerWidget {
           icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: AppColors.ink),
           onPressed: () => context.pop(),
         ),
-        title: const Text(
-          'Transaction Details',
-          style: TextStyle(
+        title: Text(
+          isDeposit ? 'Deposit Details' : 'Transaction Details',
+          style: const TextStyle(
             fontFamily: 'StyreneB',
             fontSize: 18,
             fontWeight: FontWeight.w700,
@@ -168,13 +170,19 @@ class TransactionDetailScreen extends ConsumerWidget {
 
               const SizedBox(height: 20),
 
-              // Beneficiary Card
-              _buildRecipientCard(tx, recipientName),
+              // Where the money went, or where it came in
+              if (isDeposit)
+                _buildDepositSourceCard(tx)
+              else
+                _buildRecipientCard(tx, recipientName),
 
               const SizedBox(height: 16),
 
               // Payment Breakdown Card
-              _buildBreakdownCard(tx, totalUsd),
+              if (isDeposit)
+                _buildDepositBreakdownCard(tx)
+              else
+                _buildBreakdownCard(tx, totalUsd),
 
               const SizedBox(height: 16),
 
@@ -257,9 +265,11 @@ class TransactionDetailScreen extends ConsumerWidget {
 
           const SizedBox(height: 18),
 
-          // Primary Destination Amount
+          // Primary Amount, signed by direction
           Text(
-            '${tx.destinationCurrency} ${tx.destinationAmount.toStringAsFixed(2)}',
+            tx.isDeposit
+                ? '+ ${tx.destinationCurrency} ${tx.destinationAmount.toStringAsFixed(2)}'
+                : '${tx.destinationCurrency} ${tx.destinationAmount.toStringAsFixed(2)}',
             key: const Key('detail_hero_amount'),
             style: const TextStyle(
               fontFamily: 'Copernicus',
@@ -272,9 +282,12 @@ class TransactionDetailScreen extends ConsumerWidget {
 
           const SizedBox(height: 6),
 
-          // Secondary Source Amount
+          // Secondary line: what left the wallet, or what was sent in
           Text(
-            '-\$${(tx.sourceAmount + tx.fee).toStringAsFixed(2)} USD total debited',
+            tx.isDeposit
+                ? _depositHeroSubtitle(tx)
+                : '-\$${(tx.sourceAmount + tx.fee).toStringAsFixed(2)} USD total debited',
+            textAlign: TextAlign.center,
             style: const TextStyle(
               fontFamily: 'StyreneB',
               fontSize: 14,
@@ -319,6 +332,112 @@ class TransactionDetailScreen extends ConsumerWidget {
               letterSpacing: 0.6,
               color: color,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Explains the hero figure for a deposit: what was credited, and whether it
+  /// has actually landed yet.
+  static String _depositHeroSubtitle(TransactionModel tx) {
+    switch (tx.status.toUpperCase()) {
+      case 'COMPLETED':
+        return tx.fee > 0
+            ? 'Credited to your ${tx.destinationCurrency} wallet after a ${tx.sourceCurrency} ${tx.fee.toStringAsFixed(2)} fee'
+            : 'Credited to your ${tx.destinationCurrency} wallet';
+      case 'FAILED':
+        return 'This deposit did not go through';
+      default:
+        return 'Waiting for your ${tx.sourceCurrency} ${tx.sourceAmount.toStringAsFixed(2)} transfer to arrive';
+    }
+  }
+
+  Widget _buildDepositSourceCard(TransactionModel tx) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.hairlineSubtle),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'DEPOSIT',
+            style: TextStyle(
+              fontFamily: 'StyreneB',
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+              color: AppColors.muted,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildRowItem(
+            'Destination',
+            'Your ${tx.destinationCurrency} wallet',
+            key: const Key('detail_deposit_destination'),
+          ),
+          const SizedBox(height: 10),
+          _buildRowItem('Method', 'Bank transfer'),
+          const SizedBox(height: 10),
+          _buildRowItem(
+            'Deposit Status',
+            tx.status.toUpperCase(),
+            valueColor: tx.statusColor,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDepositBreakdownCard(TransactionModel tx) {
+    final sent = tx.sourceAmount;
+    final credited = tx.destinationAmount;
+    final settled = tx.settledAmount != null;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.hairlineSubtle),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'DEPOSIT BREAKDOWN',
+            style: TextStyle(
+              fontFamily: 'StyreneB',
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+              color: AppColors.muted,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildRowItem(
+            'Amount Sent',
+            '${tx.sourceCurrency} ${sent.toStringAsFixed(2)}',
+          ),
+          const SizedBox(height: 10),
+          _buildRowItem(
+            'Rails Fee',
+            '${tx.sourceCurrency} ${tx.fee.toStringAsFixed(2)}',
+          ),
+          const SizedBox(height: 10),
+          const Divider(height: 16, color: AppColors.hairlineSoft),
+          _buildRowItem(
+            // Until the pay-in settles there is nothing credited yet, so the
+            // figure is labelled as the expectation it is.
+            settled ? 'Credited to Wallet' : 'Expected in Wallet',
+            '${tx.destinationCurrency} ${credited.toStringAsFixed(2)}',
+            valueWeight: FontWeight.w700,
+            valueColor: AppColors.ink,
+            key: const Key('detail_deposit_credited'),
           ),
         ],
       ),
@@ -424,9 +543,9 @@ class TransactionDetailScreen extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'TRANSACTION REFERENCES',
-            style: TextStyle(
+          Text(
+            tx.isDeposit ? 'DEPOSIT REFERENCES' : 'TRANSACTION REFERENCES',
+            style: const TextStyle(
               fontFamily: 'StyreneB',
               fontSize: 11,
               fontWeight: FontWeight.w700,
@@ -445,7 +564,7 @@ class TransactionDetailScreen extends ConsumerWidget {
             const SizedBox(height: 10),
             _buildCopyRowItem(
               context,
-              'WeWire Reference',
+              tx.isDeposit ? 'Deposit Reference' : 'WeWire Reference',
               wewireRef,
               key: const Key('detail_wewire_ref'),
             ),
@@ -555,6 +674,11 @@ class TransactionDetailScreen extends ConsumerWidget {
   }
 
   void _shareReceipt(BuildContext context, TransactionModel tx, String reference) {
+    if (tx.isDeposit) {
+      _shareDepositReceipt(context, tx, reference);
+      return;
+    }
+
     final receiptText = '''
 VessPay Payment Receipt
 ---------------------------
@@ -575,6 +699,34 @@ Sent seamlessly via VessPay
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Payment receipt copied to clipboard'),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _shareDepositReceipt(
+    BuildContext context,
+    TransactionModel tx,
+    String reference,
+  ) {
+    final receiptText = '''
+VessPay Deposit Receipt
+---------------------------
+Reference: $reference
+Status: ${tx.status}
+Amount Sent: ${tx.sourceCurrency} ${tx.sourceAmount.toStringAsFixed(2)}
+Fee: ${tx.sourceCurrency} ${tx.fee.toStringAsFixed(2)}
+Credited: ${tx.destinationCurrency} ${tx.destinationAmount.toStringAsFixed(2)}
+Date: ${tx.formattedDate}
+---------------------------
+Added seamlessly via VessPay
+''';
+
+    Clipboard.setData(ClipboardData(text: receiptText));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Deposit receipt copied to clipboard'),
         duration: Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
       ),

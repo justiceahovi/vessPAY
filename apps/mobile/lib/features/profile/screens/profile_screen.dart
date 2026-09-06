@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/navigation/main_app_bar.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/models/user_model.dart';
@@ -44,7 +45,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return 'VESSPAY-KWAME';
   }
 
-  void _copyToClipboard(BuildContext context, String text, String successMessage) {
+  void _copyToClipboard(
+    BuildContext context,
+    String text,
+    String successMessage,
+  ) {
     HapticFeedback.lightImpact();
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -52,7 +57,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+            const Icon(
+              Icons.check_circle_rounded,
+              color: Colors.white,
+              size: 18,
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -70,7 +79,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  void _showShareDialog(BuildContext context, String title, String shareContent) {
+  void _showShareDialog(
+    BuildContext context,
+    String title,
+    String shareContent,
+  ) {
     HapticFeedback.mediumImpact();
     showModalBottomSheet(
       context: context,
@@ -100,7 +113,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close, size: 20, color: AppColors.muted),
+                      icon: const Icon(
+                        Icons.close,
+                        size: 20,
+                        color: AppColors.muted,
+                      ),
                       onPressed: () => Navigator.pop(ctx),
                     ),
                   ],
@@ -130,7 +147,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     key: const Key('modal_copy_link_button'),
                     onPressed: () {
                       Navigator.pop(ctx);
-                      _copyToClipboard(context, shareContent, 'Copied to clipboard!');
+                      _copyToClipboard(
+                        context,
+                        shareContent,
+                        'Copied to clipboard!',
+                      );
                     },
                     icon: const Icon(Icons.copy_rounded, size: 18),
                     label: const Text('Copy to Clipboard'),
@@ -174,7 +195,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.muted)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.muted),
+            ),
           ),
           ElevatedButton(
             key: const Key('profile_confirm_logout_button'),
@@ -190,7 +214,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.semanticDown,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             child: const Text('Log Out'),
           ),
@@ -206,7 +232,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final travelProfile = ref.watch(currentTravelProfileProvider).valueOrNull;
 
     final user = userAsync.valueOrNull;
-    final displayName = (user != null &&
+    final displayName =
+        (user != null &&
             (user.firstName.isNotEmpty || user.lastName.isNotEmpty))
         ? '${user.firstName} ${user.lastName}'.trim()
         : 'Kwame Doe';
@@ -219,7 +246,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final referralShareText =
         'Hey! Join me on VessPay to send money and travel across West Africa with zero FX markup. Use my code $referralCode or tap: https://vesspay.com/join/$referralCode';
 
-    final initials = displayName.split(' ').where((s) => s.isNotEmpty).map((s) => s[0]).take(2).join().toUpperCase();
+    final initials = displayName
+        .split(' ')
+        .where((s) => s.isNotEmpty)
+        .map((s) => s[0])
+        .take(2)
+        .join()
+        .toUpperCase();
 
     final flagEmoji = travelProfile?.flagEmoji ?? '🇬🇭';
     final corridorName = travelProfile?.countryName ?? 'Ghana';
@@ -227,43 +260,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return Scaffold(
       key: const Key('profile_screen'),
       backgroundColor: AppColors.surfaceSubtle,
-      appBar: AppBar(
-        backgroundColor: AppColors.canvas,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          key: const Key('profile_back_button'),
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: AppColors.ink),
-          onPressed: () {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            } else {
-              context.go(AppRoutes.home);
-            }
-          },
-        ),
-        title: Text(
-          'Profile & Account',
-          style: GoogleFonts.inter(
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-            color: AppColors.ink,
-          ),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            key: const Key('profile_share_top_button'),
-            icon: const Icon(Icons.ios_share_rounded, size: 22, color: AppColors.ink),
-            tooltip: 'Share VessPay',
-            onPressed: () => _showShareDialog(
-              context,
-              'Share VessPay',
-              'Download VessPay - The premier cross-border traveler wallet for Africa: $_defaultShareUrl',
-            ),
-          ),
-          const SizedBox(width: 4),
-        ],
+      // Same header as Home and Transactions; sharing lives in the Share App
+      // Link card below.
+      appBar: const MainAppBar(
+        subtitle: 'Profile & Account',
+        avatarOpensProfile: false,
       ),
       body: SafeArea(
         child: RefreshIndicator(
@@ -314,7 +315,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   child: TextButton.icon(
                     key: const Key('profile_logout_button'),
                     onPressed: () => _showLogoutDialog(context),
-                    icon: const Icon(Icons.logout_rounded, size: 18, color: AppColors.semanticDown),
+                    icon: const Icon(
+                      Icons.logout_rounded,
+                      size: 18,
+                      color: AppColors.semanticDown,
+                    ),
                     label: const Text(
                       'Log Out of VessPay',
                       style: TextStyle(
@@ -324,7 +329,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ),
                     ),
                     style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(100),
                       ),
@@ -408,7 +416,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     HapticFeedback.lightImpact();
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Profile photo upload will be enabled with camera access.'),
+                        content: Text(
+                          'Profile photo upload will be enabled with camera access.',
+                        ),
                         duration: Duration(seconds: 2),
                       ),
                     );
@@ -646,7 +656,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               Flexible(
                 child: Container(
                   key: const Key('profile_kyc_badge'),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: badgeBg,
                     borderRadius: BorderRadius.circular(100),
@@ -790,10 +803,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     const SizedBox(height: 2),
                     const Text(
                       'You both get \$10 when they make their first transfer.',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: AppColors.muted,
-                      ),
+                      style: TextStyle(fontSize: 12.5, color: AppColors.muted),
                     ),
                   ],
                 ),
@@ -845,7 +855,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     referralCode,
                     'Referral code copied to clipboard!',
                   ),
-                  icon: const Icon(Icons.copy_rounded, size: 15, color: AppColors.primary),
+                  icon: const Icon(
+                    Icons.copy_rounded,
+                    size: 15,
+                    color: AppColors.primary,
+                  ),
                   label: const Text(
                     'Copy',
                     style: TextStyle(
@@ -855,7 +869,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                   ),
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     backgroundColor: AppColors.surfaceTint,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -949,10 +966,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     const SizedBox(height: 2),
                     const Text(
                       'Share the app link with fellow travelers & business partners.',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: AppColors.muted,
-                      ),
+                      style: TextStyle(fontSize: 12.5, color: AppColors.muted),
                     ),
                   ],
                 ),
@@ -971,7 +985,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.link_rounded, size: 18, color: AppColors.muted),
+                const Icon(
+                  Icons.link_rounded,
+                  size: 18,
+                  color: AppColors.muted,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -993,7 +1011,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                   borderRadius: BorderRadius.circular(6),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
                     child: Text(
                       'Copy Link',
                       style: const TextStyle(
@@ -1019,7 +1040,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 'Share VessPay App',
                 'Download VessPay - Send money and make payments seamlessly across Africa: $_defaultShareUrl',
               ),
-              icon: const Icon(Icons.ios_share_rounded, size: 16, color: AppColors.primary),
+              icon: const Icon(
+                Icons.ios_share_rounded,
+                size: 16,
+                color: AppColors.primary,
+              ),
               label: const Text(
                 'Share App Link',
                 style: TextStyle(
@@ -1053,7 +1078,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         children: [
           ListTile(
             key: const Key('profile_travel_setup_tile'),
-            leading: const Icon(Icons.flight_takeoff_rounded, color: AppColors.primary),
+            leading: const Icon(
+              Icons.flight_takeoff_rounded,
+              color: AppColors.primary,
+            ),
             title: const Text(
               'Travel Corridor Setup',
               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
@@ -1062,7 +1090,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               'Active: $corridorName $flagEmoji (Tap to switch)',
               style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
             ),
-            trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.muted),
+            trailing: const Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 14,
+              color: AppColors.muted,
+            ),
             onTap: () {
               HapticFeedback.lightImpact();
               context.push(AppRoutes.travelModeSetup);
@@ -1071,7 +1103,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           const Divider(height: 1, indent: 56, color: AppColors.hairlineSoft),
           ListTile(
             key: const Key('profile_rates_tile'),
-            leading: const Icon(Icons.currency_exchange_rounded, color: AppColors.primary),
+            leading: const Icon(
+              Icons.currency_exchange_rounded,
+              color: AppColors.primary,
+            ),
             title: const Text(
               'Live FX Rates & Corridors',
               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
@@ -1080,7 +1115,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               'Real-time quotes with zero markup',
               style: TextStyle(fontSize: 12.5, color: AppColors.muted),
             ),
-            trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.muted),
+            trailing: const Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 14,
+              color: AppColors.muted,
+            ),
             onTap: () {
               HapticFeedback.lightImpact();
               context.push(AppRoutes.travelModeSetup);
@@ -1089,7 +1128,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           const Divider(height: 1, indent: 56, color: AppColors.hairlineSoft),
           ListTile(
             key: const Key('profile_support_tile'),
-            leading: const Icon(Icons.support_agent_rounded, color: AppColors.primary),
+            leading: const Icon(
+              Icons.support_agent_rounded,
+              color: AppColors.primary,
+            ),
             title: const Text(
               '24/7 Traveler Support',
               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
@@ -1098,12 +1140,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               'Chat with concierge or view FAQs',
               style: TextStyle(fontSize: 12.5, color: AppColors.muted),
             ),
-            trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.muted),
+            trailing: const Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 14,
+              color: AppColors.muted,
+            ),
             onTap: () {
               HapticFeedback.lightImpact();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Support chat is available 24/7 via support@vesspay.com.'),
+                  content: Text(
+                    'Support chat is available 24/7 via support@vesspay.com.',
+                  ),
                   duration: Duration(seconds: 2),
                 ),
               );

@@ -262,6 +262,16 @@ class StubWalletRepository implements WalletRepository {
   Future<void> simulateWeWireDeposit(String fundingTransactionId) async {
     simulatedDepositFor = fundingTransactionId;
   }
+
+  /// Deposits this fake reports back into the activity feed.
+  List<TransactionModel> deposits = [];
+
+  @override
+  Future<List<TransactionModel>> getDeposits() async => deposits;
+
+  @override
+  Future<TransactionModel> getDepositById(String id) async =>
+      deposits.firstWhere((d) => d.id == id);
 }
 
 TransactionModel payoutTo(
@@ -331,8 +341,10 @@ void main() {
         paymentRepositoryProvider
             .overrideWithValue(paymentRepository ?? MockPaymentRepository()),
         kycRepositoryProvider.overrideWithValue(VerifiedKycRepository()),
-        if (walletRepository != null)
-          walletRepositoryProvider.overrideWithValue(walletRepository),
+        // Always stubbed: the activity feed reads deposits from the wallet
+        // repository, and no test may reach for the network.
+        walletRepositoryProvider
+            .overrideWithValue(walletRepository ?? StubWalletRepository()),
       ],
       child: MaterialApp.router(
         routerConfig: router,

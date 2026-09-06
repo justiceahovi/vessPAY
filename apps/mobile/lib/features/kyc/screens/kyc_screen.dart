@@ -298,7 +298,9 @@ class _KycScreenState extends ConsumerState<KycScreen> {
                   height: 48,
                   child: ElevatedButton(
                     key: const Key('launch_kyc_button'),
-                    onPressed: _isLaunching ? null : _launchHostedKyc,
+                    onPressed: _isLaunching || _isFullyVerified(statusAsync)
+                        ? null
+                        : _launchHostedKyc,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: AppColors.onPrimary,
@@ -321,9 +323,11 @@ class _KycScreenState extends ConsumerState<KycScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                _needsEnhanced(statusAsync)
-                                    ? 'Start Enhanced Verification'
-                                    : 'Launch Verification Portal',
+                                _isFullyVerified(statusAsync)
+                                    ? 'Verification Complete'
+                                    : _needsEnhanced(statusAsync)
+                                        ? 'Start Enhanced Verification'
+                                        : 'Launch Verification Portal',
                                 style: TextStyle(
                                   fontFamily: 'StyreneB',
                                   fontSize: 15,
@@ -331,7 +335,12 @@ class _KycScreenState extends ConsumerState<KycScreen> {
                                 ),
                               ),
                               SizedBox(width: 8),
-                              Icon(Icons.open_in_new, size: 18),
+                              Icon(
+                                _isFullyVerified(statusAsync)
+                                    ? Icons.check_circle_outline
+                                    : Icons.open_in_new,
+                                size: 18,
+                              ),
                             ],
                           ),
                   ),
@@ -434,6 +443,14 @@ class _KycScreenState extends ConsumerState<KycScreen> {
         ),
       ),
     );
+  }
+
+  /// True once both onboarding steps are done — basic KYC approved and Enhanced
+  /// Due Diligence approved. There is nothing left to launch the portal for.
+  bool _isFullyVerified(AsyncValue<KycStatusModel> statusAsync) {
+    final status = statusAsync.valueOrNull;
+    if (status == null) return false;
+    return status.isApproved && status.isEnhancedApproved;
   }
 
   /// True once basic onboarding is approved but WeWire still wants Enhanced Due

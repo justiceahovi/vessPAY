@@ -6,6 +6,7 @@ import 'package:vesspay/features/wallet/models/topup_model.dart';
 import 'package:vesspay/features/wallet/models/wallet_balance_model.dart';
 import 'package:vesspay/features/wallet/models/wallet_currency_model.dart';
 import 'package:vesspay/features/wallet/repositories/wallet_repository.dart';
+import 'package:vesspay/features/pay/models/transaction_model.dart';
 
 /// Offline wallet repository for tests that only care about the currency the
 /// wallet is held in, so no screen reaches for the network.
@@ -81,6 +82,25 @@ class FakeCurrencyWalletRepository implements WalletRepository {
   Future<void> simulateWeWireDeposit(String fundingTransactionId) async {
     simulatedDepositFor = fundingTransactionId;
   }
+
+  /// Deposits this fake reports back into the activity feed.
+  List<TransactionModel> deposits = [];
+
+  /// Makes the deposit history unreachable, to prove the feed degrades to the
+  /// payments it can still load.
+  bool depositsThrow = false;
+
+  @override
+  Future<List<TransactionModel>> getDeposits() async {
+    if (depositsThrow) {
+      throw Exception('deposits unavailable');
+    }
+    return deposits;
+  }
+
+  @override
+  Future<TransactionModel> getDepositById(String id) async =>
+      deposits.firstWhere((d) => d.id == id);
 }
 
 /// Overrides that give a test a wallet already held in [currency], skipping the

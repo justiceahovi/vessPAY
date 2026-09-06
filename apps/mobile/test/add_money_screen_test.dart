@@ -12,6 +12,7 @@ import 'package:vesspay/features/kyc/models/kyc_model.dart';
 import 'package:vesspay/features/kyc/repositories/kyc_repository.dart';
 import 'package:vesspay/features/wallet/repositories/wallet_repository.dart';
 import 'package:vesspay/features/wallet/screens/add_money_screen.dart';
+import 'package:vesspay/features/pay/models/transaction_model.dart';
 
 /// Money-movement screens are gated on KYC, so these tests act as a verified
 /// user; the gate itself is covered in kyc_flow_test.dart.
@@ -108,6 +109,16 @@ class MockWalletRepositoryForAddMoney implements WalletRepository {
   Future<void> simulateWeWireDeposit(String fundingTransactionId) async {
     simulatedDepositFor = fundingTransactionId;
   }
+
+  /// Deposits this fake reports back into the activity feed.
+  List<TransactionModel> deposits = [];
+
+  @override
+  Future<List<TransactionModel>> getDeposits() async => deposits;
+
+  @override
+  Future<TransactionModel> getDepositById(String id) async =>
+      deposits.firstWhere((d) => d.id == id);
 }
 
 void main() {

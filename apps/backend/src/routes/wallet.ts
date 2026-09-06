@@ -639,5 +639,112 @@ router.post('/topup/:id/simulate', authenticate, async (req: Request, res: Respo
   }
 });
 
-export default router;
+/**
+ * Formats a funding transaction as a unified transaction record, in the same
+ * shape the payment history uses, so the app can render money coming in beside
+ * money going out without a second presentation model.
+ *
+ * `amount` is what the user said they would send; `settledAmount` is what the
+ * rails actually delivered. Until settlement they are the same figure, so a
+ * pending deposit still reads sensibly.
+ */
+export function formatDepositTransaction(ft: any) {
+  const amount = Number(ft.amount);
+  const settledAmount = ft.settledAmount === null || ft.settledAmount === undefined
+    ? null
+    : Number(ft.settledAmount);
+  const fee = Number(ft.fee ?? 0);
+  const creditedAmount = settledAmount === null ? amount : settledAmount;
+  const createdAtIso = ft.createdAt instanceof Date ? ft.createdAt.toISOString() : String(ft.createdAt);
+  const updatedAtIso = ft.updatedAt instanceof Date ? ft.updatedAt.toISOString() : String(ft.updatedAt);
+  const vesspayReference = `VP-DEP-${String(ft.id).replace(/-/g, '').slice(0, 12).toUpperCase()}`;
 
+  return {
+    id: ft.id,
+    userId: ft.userId,
+    type: 'deposit',
+    status: ft.status,
+    // A deposit does not cross currencies: it lands in the wallet it was sent to.
+    sourceCurrency: ft.currency,
+    sourceAmount: amount,
+    destinationCurrency: ft.currency,
+    destinationAmount: creditedAmount,
+    settledAmount,
+    fee,
+    exchangeRate: 1,
+    rate: 1,
+    checkoutId: ft.checkoutId,
+    vesspayReference,
+    reference: vesspayReference,
+    wewireReference: ft.checkoutId,
+    createdAt: createdAtIso,
+    updatedAt: updatedAtIso,
+    timestamps: {
+      createdAt: createdAtIso,
+      updatedAt: updatedAtIso,
+    },
+  };
+}
+
+/**
+ * GET /api/wallet/deposits
+ * Lists the user's deposits, newest first, so the activity feed can show them
+ * alongside payouts. Enforces user isolation: a user only sees their own.
+ */
+router.get('/deposits', authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const deposits = await prisma.fundingTransaction.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+    res.status(200).json(deposits.map(formatDepositTransaction));
+  } catch (err: any) {
+    console.error('Error fetching deposits:', err);
+    res.status(500).json({
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to retrieve deposits',
+      },
+    });
+  }
+});
+
+/**
+ * GET /api/wallet/deposits/:id
+ * Full detail for a single deposit, so a deposit row opened by id alone (from
+ * the dashboard feed) resolves the same way a payout does.
+ */
+router.get('/deposits/:id', authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const { id } = req.params;
+
+    const deposit = await prisma.fundingTransaction.findFirst({
+      where: { id, userId },
+    });
+
+    if (!deposit) {
+      res.status(404).json({
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Deposit not found',
+        },
+      });
+      return;
+    }
+
+    res.status(200).json(formatDepositTransaction(deposit));
+  } catch (err: any) {
+    console.error('Error fetching deposit:', err);
+    res.status(500).json({
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to retrieve deposit',
+      },
+    });
+  }
+});
+
+export default router;
