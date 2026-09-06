@@ -28,6 +28,11 @@ export interface ResolvedInstitution extends WeWireInstitution {
 let cached: { key: string; institutions: WeWireInstitution[]; timestamp: number } | null = null;
 const CACHE_TTL_MS = 60 * 60 * 1000; // institution lists change rarely
 
+/// A failed fetch is cached briefly too: name lookups call through here on every
+/// keystroke-debounce, and an unavailable endpoint should not be retried each time.
+const FAILURE_CACHE_TTL_MS = 60 * 1000;
+let lastFailure: { key: string; timestamp: number } | null = null;
+
 /**
  * Ghana institutions as returned by the sandbox, used when the API key is not
  * configured or the endpoint is unreachable. Codes are WeWire's own sort codes.
@@ -97,6 +102,15 @@ export async function getWeWireInstitutions(
     return key === 'GHS' ? GHANA_INSTITUTIONS : [];
   }
 
+  if (
+    !forceRefresh &&
+    lastFailure &&
+    lastFailure.key === key &&
+    now - lastFailure.timestamp < FAILURE_CACHE_TTL_MS
+  ) {
+    return key === 'GHS' ? GHANA_INSTITUTIONS : [];
+  }
+
   try {
     const res = await fetch(`${baseUrl}/v1/banks?currency=${encodeURIComponent(key)}`, {
       headers: { 'ww-api-key': apiKey, 'Content-Type': 'application/json' },
@@ -104,6 +118,7 @@ export async function getWeWireInstitutions(
 
     if (!res.ok) {
       console.warn(`WeWire /v1/banks returned ${res.status}; using the fallback institution list`);
+      lastFailure = { key, timestamp: now };
       return key === 'GHS' ? GHANA_INSTITUTIONS : [];
     }
 
@@ -128,6 +143,7 @@ export async function getWeWireInstitutions(
     return institutions;
   } catch (err: any) {
     console.warn('Failed to fetch WeWire institutions:', err?.message || err);
+    lastFailure = { key, timestamp: now };
     return key === 'GHS' ? GHANA_INSTITUTIONS : [];
   }
 }

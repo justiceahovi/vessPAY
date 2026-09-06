@@ -1,6 +1,3 @@
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
-
 class AppConfig {
   AppConfig._();
 
@@ -9,13 +6,14 @@ class AppConfig {
   /// Default local backend port
   static const int defaultPort = 3000;
 
+  /// Production Railway backend URL
+  static const String productionUrl = 'https://vesspay-production.up.railway.app';
+
   /// Retrieves the backend base URL.
   /// Priority:
   /// 1. Runtime override (set via `setBaseUrl`)
   /// 2. Dart compile-time environment variable `API_BASE_URL`
-  /// 3. Platform-aware local URL:
-  ///    - Android emulator: `http://10.0.2.2:3000`
-  ///    - Web / iOS / Desktop / macOS / Windows / Linux: `http://localhost:3000`
+  /// 3. Production Railway URL (default)
   static String get baseUrl {
     if (_overrideBaseUrl != null && _overrideBaseUrl!.isNotEmpty) {
       return _overrideBaseUrl!;
@@ -26,17 +24,7 @@ class AppConfig {
       return envUrl;
     }
 
-    if (!kIsWeb) {
-      try {
-        if (Platform.isAndroid) {
-          return 'http://10.0.2.2:$defaultPort';
-        }
-      } catch (_) {
-        // Fall back to localhost if Platform is not available in environment
-      }
-    }
-
-    return 'http://localhost:$defaultPort';
+    return productionUrl;
   }
 
   /// Sets a runtime override for the base URL (useful for testing or dynamic environment switching).

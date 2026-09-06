@@ -7,8 +7,27 @@ import 'package:vesspay/features/wallet/models/topup_model.dart';
 import 'package:vesspay/features/wallet/models/wallet_balance_model.dart';
 import 'package:vesspay/features/wallet/providers/wallet_providers.dart';
 import 'package:vesspay/features/wallet/models/wallet_currency_model.dart';
+import 'package:vesspay/features/kyc/models/kyc_model.dart';
+import 'package:vesspay/features/kyc/repositories/kyc_repository.dart';
 import 'package:vesspay/features/wallet/repositories/wallet_repository.dart';
 import 'package:vesspay/features/wallet/screens/add_money_screen.dart';
+
+/// Money-movement screens are gated on KYC, so these tests act as a verified
+/// user; the gate itself is covered in kyc_flow_test.dart.
+class VerifiedKycRepository implements KycRepository {
+  @override
+  Future<KycLinkModel> getKycLink() async =>
+      KycLinkModel(url: 'https://verify.wewire.com/session', stage: 'ONBOARDING');
+
+  @override
+  Future<KycStatusModel> getKycStatus() async => KycStatusModel(
+        onboardingStatus: 'APPROVED',
+        enhancedKycStatus: 'TIER_2',
+      );
+
+  @override
+  Future<KycStatusModel> submitDemoKyc() async => getKycStatus();
+}
 
 class MockWalletRepositoryForAddMoney implements WalletRepository {
   List<WalletBalanceModel> balances = [
@@ -109,6 +128,7 @@ void main() {
         ProviderScope(
           overrides: [
             walletRepositoryProvider.overrideWithValue(mockRepo),
+            kycRepositoryProvider.overrideWithValue(VerifiedKycRepository()),
           ],
           child: const MaterialApp(
             home: AddMoneyScreen(),
@@ -148,6 +168,7 @@ void main() {
         ProviderScope(
           overrides: [
             walletRepositoryProvider.overrideWithValue(mockRepo),
+            kycRepositoryProvider.overrideWithValue(VerifiedKycRepository()),
           ],
           child: const MaterialApp(
             home: AddMoneyScreen(),
@@ -186,6 +207,7 @@ void main() {
         ProviderScope(
           overrides: [
             walletRepositoryProvider.overrideWithValue(mockRepo),
+            kycRepositoryProvider.overrideWithValue(VerifiedKycRepository()),
           ],
           child: const MaterialApp(
             home: AddMoneyScreen(),
@@ -228,6 +250,7 @@ void main() {
         ProviderScope(
           overrides: [
             walletRepositoryProvider.overrideWithValue(mockRepo),
+            kycRepositoryProvider.overrideWithValue(VerifiedKycRepository()),
           ],
           child: MaterialApp.router(
             routerConfig: router,

@@ -31,6 +31,10 @@ class PayFlowData {
   final String network;
   final String recipientPhone;
   final String recipientName;
+
+  /// True when the operator or bank confirmed the recipient name, rather than
+  /// the user typing it. Carried through to the review screen.
+  final bool recipientNameVerified;
   final String accountNumber;
   final double destinationAmount;
   final double? quoteSourceAmount;
@@ -48,6 +52,7 @@ class PayFlowData {
     this.network = 'MTN',
     this.recipientPhone = '',
     this.recipientName = '',
+    this.recipientNameVerified = false,
     this.accountNumber = '',
     this.destinationAmount = 0.0,
     this.quoteSourceAmount,
@@ -66,6 +71,7 @@ class PayFlowData {
     String? network,
     String? recipientPhone,
     String? recipientName,
+    bool? recipientNameVerified,
     String? accountNumber,
     double? destinationAmount,
     double? quoteSourceAmount,
@@ -83,6 +89,7 @@ class PayFlowData {
       network: network ?? this.network,
       recipientPhone: recipientPhone ?? this.recipientPhone,
       recipientName: recipientName ?? this.recipientName,
+      recipientNameVerified: recipientNameVerified ?? this.recipientNameVerified,
       accountNumber: accountNumber ?? this.accountNumber,
       destinationAmount: destinationAmount ?? this.destinationAmount,
       quoteSourceAmount: quoteSourceAmount ?? this.quoteSourceAmount,

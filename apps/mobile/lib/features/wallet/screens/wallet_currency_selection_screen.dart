@@ -7,7 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../models/wallet_currency_model.dart';
 import '../providers/currency_providers.dart';
 
-/// Wallet Currency Selection ("What currency is your wallet in?")
+/// Wallet Currency Selection ("What currency do you want your wallet in?")
 ///
 /// Shown once on first sign-on, before travel mode setup. The choice is stored
 /// on the user's account, so returning users skip straight past this screen.
@@ -152,7 +152,7 @@ class _WalletCurrencySelectionScreenState
                   const SizedBox(height: 16),
                 ],
                 Text(
-                  'What currency is your wallet in?',
+                  'What currency do you want your wallet in?',
                   style: GoogleFonts.inter(
                     fontWeight: FontWeight.w700,
                     fontSize: widget.isBottomSheet ? 22 : 28,

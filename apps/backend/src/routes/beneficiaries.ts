@@ -6,7 +6,7 @@ import {
   deleteWeWireBeneficiary,
   normalizeGhanaPhone,
   normalizeBankAccountNumber,
-  mapGhanaNetwork,
+  lookupAccountName,
   resolveInstitution,
 } from '../lib/wewire';
 
@@ -222,90 +222,167 @@ router.get('/resolve', async (req: Request, res: Response) => {
     }
 
     const phoneInput = (req.query.phone || '').toString().trim();
+    const accountInput = (req.query.accountNumber || '').toString().trim();
     const networkInput = (req.query.network || '').toString().trim();
+    const currency = (req.query.currency || 'GHS').toString().trim().toUpperCase();
 
-    if (!phoneInput) {
-      return res.status(400).json({
-        error: { code: 'INVALID_INPUT', message: 'phone query parameter is required' },
-      });
-    }
-
-    const { msisdn } = normalizeGhanaPhone(phoneInput);
-    if (!/^0[235]\d{8}$/.test(msisdn)) {
+    if (!phoneInput && !accountInput) {
       return res.status(400).json({
         error: {
           code: 'INVALID_INPUT',
-          message: 'Please provide a valid 10-digit Ghana mobile money phone number (e.g. 024XXXXXXX)',
+          message: 'phone (mobile money) or accountNumber (bank) is required',
         },
       });
     }
 
-    let network: string | null = null;
+    // Resolve the operator or bank, so the lookup is addressed to the right rail
+    let institution = null;
     if (networkInput) {
       try {
-        network = mapGhanaNetwork(networkInput).network;
+        institution = await resolveInstitution(networkInput, currency);
       } catch (err: any) {
         return res.status(400).json({
           error: {
             code: 'INVALID_INPUT',
-            message: err.message || 'Invalid network. Supported networks are MTN, Telecel, or AirtelTigo',
+            message: err.message || 'Invalid network or bank',
           },
         });
       }
     }
 
+    const isBank = accountInput.length > 0 && institution?.channel === 'BANK';
+
+    let destinationAccount: string;
+    if (isBank) {
+      const normalized = normalizeBankAccountNumber(accountInput);
+      if (!normalized) {
+        return res.status(400).json({
+          error: {
+            code: 'INVALID_INPUT',
+            message: 'Please provide a valid bank account number (8-20 digits)',
+          },
+        });
+      }
+      destinationAccount = normalized;
+    } else {
+      const { msisdn } = normalizeGhanaPhone(phoneInput);
+      if (!/^0[235]\d{8}$/.test(msisdn)) {
+        return res.status(400).json({
+          error: {
+            code: 'INVALID_INPUT',
+            message: 'Please provide a valid 10-digit Ghana mobile money phone number (e.g. 024XXXXXXX)',
+          },
+        });
+      }
+      destinationAccount = msisdn;
+    }
+
+    const network = institution?.name ?? null;
+    const channel = institution?.channel ?? (isBank ? 'BANK' : 'MOBILE_MONEY');
+
     // Placeholder names auto-generated for unnamed recipients are not real names.
     const isPlaceholderName = (name?: string | null) =>
       !name || name.trim().length < 2 || /^Recipient\s+\d+$/i.test(name.trim());
 
-    // 1. Saved beneficiaries -- same network first, then the number on any network.
+    // 1. Name enquiry with the operator or bank. This is the only source that
+    // actually confirms who owns the account, so it wins over local history.
+    if (institution) {
+      const lookup = await lookupAccountName({
+        accountCode: institution.code,
+        accountNumber: destinationAccount,
+        currency,
+      });
+
+      if (lookup && !isPlaceholderName(lookup.accountName)) {
+        return res.status(200).json({
+          resolved: true,
+          verified: true,
+          phone: isBank ? null : destinationAccount,
+          accountNumber: isBank ? destinationAccount : null,
+          network,
+          institutionCode: institution.code,
+          channel,
+          name: lookup.accountName,
+          source: 'provider',
+        });
+      }
+    }
+
+    // 2. Saved beneficiaries -- same institution first, then the account on any.
     const beneficiaries = await prisma.beneficiary.findMany({
-      where: { userId, phone: msisdn },
+      where: {
+        userId,
+        ...(isBank ? { accountNumber: destinationAccount } : { phone: destinationAccount }),
+      },
       orderBy: { createdAt: 'desc' },
-      select: { name: true, network: true },
+      select: { name: true, network: true, institutionCode: true },
     });
 
     const beneficiaryMatch =
-      (network ? beneficiaries.find((b) => b.network === network && !isPlaceholderName(b.name)) : undefined) ||
-      beneficiaries.find((b) => !isPlaceholderName(b.name));
+      (institution
+        ? beneficiaries.find(
+            (b) => b.institutionCode === institution.code && !isPlaceholderName(b.name)
+          )
+        : undefined) || beneficiaries.find((b) => !isPlaceholderName(b.name));
 
     if (beneficiaryMatch) {
       return res.status(200).json({
         resolved: true,
-        phone: msisdn,
+        verified: false,
+        phone: isBank ? null : destinationAccount,
+        accountNumber: isBank ? destinationAccount : null,
         network: beneficiaryMatch.network,
+        institutionCode: beneficiaryMatch.institutionCode ?? institution?.code ?? null,
+        channel,
         name: beneficiaryMatch.name.trim(),
         source: 'beneficiary',
       });
     }
 
-    // 2. Previously paid recipient with the same number.
+    // 3. Previously paid recipient with the same destination account.
     const transactions = await prisma.transaction.findMany({
-      where: { userId, recipientPhone: msisdn, type: 'payout' },
+      where: {
+        userId,
+        type: 'payout',
+        ...(isBank
+          ? { recipientAccount: destinationAccount }
+          : { recipientPhone: destinationAccount }),
+      },
       orderBy: { createdAt: 'desc' },
       take: 10,
-      select: { recipientName: true, network: true },
+      select: { recipientName: true, network: true, institutionCode: true },
     });
 
     const transactionMatch =
-      (network ? transactions.find((t) => t.network === network && !isPlaceholderName(t.recipientName)) : undefined) ||
-      transactions.find((t) => !isPlaceholderName(t.recipientName));
+      (institution
+        ? transactions.find(
+            (t) => t.institutionCode === institution.code && !isPlaceholderName(t.recipientName)
+          )
+        : undefined) || transactions.find((t) => !isPlaceholderName(t.recipientName));
 
     if (transactionMatch) {
       return res.status(200).json({
         resolved: true,
-        phone: msisdn,
+        verified: false,
+        phone: isBank ? null : destinationAccount,
+        accountNumber: isBank ? destinationAccount : null,
         network: transactionMatch.network || network,
+        institutionCode: transactionMatch.institutionCode ?? institution?.code ?? null,
+        channel,
         name: (transactionMatch.recipientName || '').trim(),
         source: 'history',
       });
     }
 
-    // 3. Unknown number -- the user types the name manually.
+    // 4. Nothing known and nothing confirmed -- the user names the recipient.
     return res.status(200).json({
       resolved: false,
-      phone: msisdn,
+      verified: false,
+      phone: isBank ? null : destinationAccount,
+      accountNumber: isBank ? destinationAccount : null,
       network,
+      institutionCode: institution?.code ?? null,
+      channel,
       name: null,
       source: null,
     });

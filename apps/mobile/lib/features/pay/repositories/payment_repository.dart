@@ -33,7 +33,8 @@ abstract class PaymentRepository {
   /// Resolves the recipient name known for a mobile money number, so the
   /// Pay Anyone flow can auto-fill it while the user types.
   Future<RecipientResolutionModel> resolveRecipientName({
-    required String phone,
+    String? phone,
+    String? accountNumber,
     String? network,
   });
 
@@ -112,13 +113,16 @@ class ApiPaymentRepository implements PaymentRepository {
 
   @override
   Future<RecipientResolutionModel> resolveRecipientName({
-    required String phone,
+    String? phone,
+    String? accountNumber,
     String? network,
   }) async {
     return _apiClient.get<RecipientResolutionModel>(
       '/api/beneficiaries/resolve',
       queryParameters: {
-        'phone': phone,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+        if (accountNumber != null && accountNumber.isNotEmpty)
+          'accountNumber': accountNumber,
         if (network != null && network.isNotEmpty) 'network': network,
       },
       fromJson: (data) =>

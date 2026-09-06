@@ -22,10 +22,11 @@ class MockPaymentRepository implements PaymentRepository {
 
   @override
   Future<RecipientResolutionModel> resolveRecipientName({
-    required String phone,
+    String? phone,
+    String? accountNumber,
     String? network,
   }) async =>
-      RecipientResolutionModel.unresolved(phone);
+      RecipientResolutionModel.unresolved(phone ?? accountNumber ?? '');
 
   final PaymentQuoteModel? stubbedQuote;
   final bool shouldFail;

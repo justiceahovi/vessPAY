@@ -110,10 +110,11 @@ class NavMockPaymentRepository implements PaymentRepository {
 
   @override
   Future<RecipientResolutionModel> resolveRecipientName({
-    required String phone,
+    String? phone,
+    String? accountNumber,
     String? network,
   }) async =>
-      RecipientResolutionModel.unresolved(phone);
+      RecipientResolutionModel.unresolved(phone ?? accountNumber ?? '');
 
   @override
   Future<PaymentQuoteModel> getQuote({

@@ -258,10 +258,11 @@ void main() {
       await tester.tap(find.byIcon(Icons.close));
       await tester.pumpAndSettle();
 
-      // Tap profile avatar in header opens more options bottom sheet
-      await tester.tap(find.byIcon(Icons.person_outline_rounded));
+      // Tap profile avatar in header navigates to Profile & Account screen
+      await tester.tap(find.byKey(const Key('home_avatar_button')));
       await tester.pumpAndSettle();
-      expect(find.text('More Options'), findsOneWidget);
+      expect(find.byKey(const Key('profile_screen')), findsOneWidget);
+      expect(find.text('Profile & Account'), findsOneWidget);
       expect(find.text('Travel Corridor Setup'), findsOneWidget);
     });
   });

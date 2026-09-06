@@ -43,10 +43,12 @@ class PayFlowNotifier extends StateNotifier<PayFlowData> {
     required String phone,
     String name = '',
     String accountNumber = '',
+    bool nameVerified = false,
   }) {
     state = state.copyWith(
       recipientPhone: phone.trim(),
       recipientName: name.trim(),
+      recipientNameVerified: nameVerified,
       accountNumber: accountNumber.trim(),
     );
   }
@@ -250,30 +252,48 @@ String? inferGhanaNetwork(String phoneInput) {
 /// per (number, network) pair instead of one per keystroke.
 class RecipientLookup {
   final String phone;
+  final String accountNumber;
   final String network;
+  final String channel;
 
-  const RecipientLookup({required this.phone, required this.network});
+  const RecipientLookup({
+    this.phone = '',
+    this.accountNumber = '',
+    required this.network,
+    this.channel = 'MOBILE_MONEY',
+  });
+
+  bool get isBank => channel == 'BANK';
+
+  /// The destination account in the form the backend expects, or null while the
+  /// user has not typed enough for a lookup to make sense.
+  String? get destinationAccount => isBank
+      ? normalizeBankAccountNumber(accountNumber)
+      : normalizeGhanaMsisdn(phone);
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is RecipientLookup &&
           other.phone == phone &&
-          other.network == network;
+          other.accountNumber == accountNumber &&
+          other.network == network &&
+          other.channel == channel;
 
   @override
-  int get hashCode => Object.hash(phone, network);
+  int get hashCode => Object.hash(phone, accountNumber, network, channel);
 }
 
-/// Debounced recipient name resolution for the Pay Anyone flow.
-/// Returns null when the number is incomplete or unknown to the backend.
+/// Debounced recipient name confirmation for the Pay Anyone flow. The backend
+/// asks the operator or bank who owns the account, falling back to names we
+/// already know. Returns null while there is not enough to look up.
 final recipientNameProvider = FutureProvider.autoDispose
     .family<RecipientResolutionModel?, RecipientLookup>((ref, lookup) async {
-  final msisdn = normalizeGhanaMsisdn(lookup.phone);
-  if (msisdn == null) return null;
+  final destination = lookup.destinationAccount;
+  if (destination == null || lookup.network.isEmpty) return null;
 
   // Debounce: a further keystroke changes the key and disposes this instance
-  // before the delay elapses, so only the number the user settled on is sent.
+  // before the delay elapses, so only the account the user settled on is sent.
   var cancelled = false;
   ref.onDispose(() => cancelled = true);
   await Future<void>.delayed(const Duration(milliseconds: 400));
@@ -281,7 +301,8 @@ final recipientNameProvider = FutureProvider.autoDispose
 
   final repository = ref.read(paymentRepositoryProvider);
   return repository.resolveRecipientName(
-    phone: msisdn,
-    network: lookup.network.isNotEmpty ? lookup.network : null,
+    phone: lookup.isBank ? null : destination,
+    accountNumber: lookup.isBank ? destination : null,
+    network: lookup.network,
   );
 });

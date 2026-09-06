@@ -12,6 +12,16 @@ class VessPayTextField extends StatefulWidget {
   final bool enabled;
   final Key? fieldKey;
   final Widget? prefixIcon;
+
+  /// Trailing widget rendered inside the field, e.g. a verification badge.
+  final Widget? suffix;
+
+  /// A read-only field still shows its value and stays legible, but cannot be
+  /// edited -- used when a value was confirmed by an authority, not typed.
+  final bool readOnly;
+
+  /// Optional trailing action shown next to the label, e.g. "Change".
+  final Widget? labelAction;
   final void Function(String)? onChanged;
 
   const VessPayTextField({
@@ -25,6 +35,9 @@ class VessPayTextField extends StatefulWidget {
     this.enabled = true,
     this.fieldKey,
     this.prefixIcon,
+    this.suffix,
+    this.readOnly = false,
+    this.labelAction,
     this.onChanged,
   });
 
@@ -48,14 +61,22 @@ class _VessPayTextFieldState extends State<VessPayTextField> {
       mainAxisSize: MainAxisSize.min,
       children: [
         // Input Label
-        Text(
-          widget.label,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: AppColors.bodyStrong,
-            letterSpacing: 0,
-          ),
+        Row(
+          children: [
+            Text(
+              widget.label,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.bodyStrong,
+                letterSpacing: 0,
+              ),
+            ),
+            if (widget.labelAction != null) ...[
+              const Spacer(),
+              widget.labelAction!,
+            ],
+          ],
         ),
         const SizedBox(height: 6),
         // TextFormField
@@ -66,6 +87,7 @@ class _VessPayTextFieldState extends State<VessPayTextField> {
           keyboardType: widget.keyboardType,
           obscureText: widget.isPassword ? _obscureText : false,
           enabled: widget.enabled,
+          readOnly: widget.readOnly,
           onChanged: widget.onChanged,
           style: const TextStyle(
             fontSize: 15,
@@ -101,7 +123,12 @@ class _VessPayTextFieldState extends State<VessPayTextField> {
                       });
                     },
                   )
-                : null,
+                : widget.suffix,
+            suffixIconConstraints: const BoxConstraints(
+              minHeight: 24,
+              minWidth: 24,
+              maxHeight: 44,
+            ),
             // Border definitions per DESIGN.md
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),

@@ -360,107 +360,6 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
-  void _showMoreBottomSheet(BuildContext context) {
-    HapticFeedback.lightImpact();
-    showModalBottomSheet(
-      context: context,
-      useRootNavigator: true,
-      backgroundColor: AppColors.canvas,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'More Options',
-                      style: GoogleFonts.inter(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.ink,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close,
-                          size: 20, color: AppColors.muted),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                ListTile(
-                  leading: const Icon(Icons.flight_takeoff_rounded,
-                      color: AppColors.primary),
-                  title: const Text('Travel Corridor Setup',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: const Text('Switch between Ghana and Nigeria rails'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    context.push(AppRoutes.travelModeSetup);
-                  },
-                ),
-                ListTile(
-                  key: const Key('home_kyc_card'),
-                  leading: const Icon(Icons.verified_user_outlined,
-                      color: AppColors.primary),
-                  title: const Text('Identity Verification (KYC)',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: const Text('WeWire hosted compliance portal'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    context.push(AppRoutes.kycVerification);
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.currency_exchange_rounded,
-                      color: AppColors.primary),
-                  title: const Text('Exchange Rates & Rails',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: const Text('Check live FX quotes'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    final rate = ref.read(walletToGhsRateProvider);
-                    _showRatesBottomSheet(
-                      context,
-                      rate,
-                      ref.read(activeWalletCurrencyProvider),
-                    );
-                  },
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.logout_rounded,
-                      color: AppColors.semanticDown),
-                  title: const Text('Log Out (Return to Login)',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.semanticDown)),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await ref.read(authRepositoryProvider).logout();
-                    ref.read(currentTravelProfileProvider.notifier).clear();
-                    if (context.mounted) {
-                      context.go(AppRoutes.login);
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final balancesAsync = ref.watch(walletBalancesProvider);
@@ -597,7 +496,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
             children: [
               // Avatar (Taps for profile & more options)
               InkWell(
-                onTap: () => _showMoreBottomSheet(context),
+                key: const Key('home_avatar_button'),
+                onTap: () => context.push(AppRoutes.profile),
                 borderRadius: BorderRadius.circular(100),
                 child: Container(
                   width: 44,
@@ -912,18 +812,22 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               ),
               const SizedBox(height: 14),
 
-              // Secondary Destination Currency Equivalent Container (Circled part)
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceDarkElevated,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppColors.hairlineSoft.withValues(alpha: 0.1),
-                    width: 1.0,
+              // Secondary Destination Currency Equivalent Container (Tap for live rates)
+              InkWell(
+                key: const Key('wallet_live_rates_button'),
+                onTap: () => _showRatesBottomSheet(context, rate, walletCurrency),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceDarkElevated,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.hairlineSoft.withValues(alpha: 0.1),
+                      width: 1.0,
+                    ),
                   ),
-                ),
                 child: Row(
                   children: [
                     Text(flagEmoji, style: const TextStyle(fontSize: 16)),
@@ -957,7 +861,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 18),
+            ),
+            const SizedBox(height: 18),
 
               const SizedBox(height: 20),
 

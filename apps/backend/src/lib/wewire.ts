@@ -232,8 +232,13 @@ export async function createWeWireSubCustomer(
 }
 
 /**
- * Submits simplified/demo KYC for an individual sub-customer in the WeWire sandbox.
- * Moves sub-customer onboardingStatus from DRAFT to IN_REVIEW.
+ * Submits the canned simplified/demo KYC dossier for an individual sub-customer
+ * in the WeWire sandbox, moving onboardingStatus off DRAFT.
+ *
+ * Only ever called from the explicit demo-submit endpoint, never during
+ * registration, so the outcome is reported back rather than swallowed: a
+ * `submitted: false` result means the sandbox is not wired up, and a rejected
+ * submission throws.
  */
 export async function submitSimplifiedKyc(
   subCustomerId: string,
@@ -242,12 +247,15 @@ export async function submitSimplifiedKyc(
     lastName: string;
     country?: string | null;
   }
-): Promise<void> {
+): Promise<{ submitted: boolean; reason?: string }> {
   const apiKey = process.env.WEWIRE_API_KEY;
   const baseUrl = (process.env.WEWIRE_BASE_URL || 'https://stage-capi.wewireafrica.com').replace(/\/$/, '');
 
   if (!apiKey || subCustomerId.startsWith('sub_stub_')) {
-    return;
+    return {
+      submitted: false,
+      reason: 'WeWire sandbox is not configured for this environment',
+    };
   }
 
   const alpha3 = toAlpha3Country(params.country);
@@ -278,22 +286,33 @@ export async function submitSimplifiedKyc(
     },
   };
 
-  try {
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'ww-api-key': apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(kycPayload),
-    });
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'ww-api-key': apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(kycPayload),
+  });
 
-    if (!res.ok) {
-      console.warn(`Simplified KYC submission returned non-200: ${res.status}`, await res.text());
+  if (!res.ok) {
+    const text = await res.text();
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
     }
-  } catch (err) {
-    console.warn('Non-blocking error during simplified KYC submission:', err);
+    const errMsg =
+      typeof data === 'object' && data?.error?.message
+        ? data.error.message
+        : typeof data === 'object' && data?.message
+        ? data.message
+        : text;
+    throw new Error(`Simplified KYC submission failed: ${errMsg} (Status: ${res.status})`);
   }
+
+  return { submitted: true };
 }
 
 /**
@@ -946,3 +965,77 @@ export async function sendWeWireDisbursement(
   };
 }
 
+
+export interface AccountNameLookupResult {
+  accountName: string;
+  accountCode: string;
+  accountNumber: string;
+}
+
+const accountNameCache = new Map<string, { name: string | null; timestamp: number }>();
+const ACCOUNT_NAME_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Name enquiry against WeWire's GET /v1/account-lookup.
+ *
+ * Verified against the sandbox: the endpoint takes currency (GHS|NGN),
+ * accountCode (the sort code, 2-16 chars) and accountNumber (6-32 chars), and
+ * returns { accountName } for an account the operator or bank recognises.
+ * An account it cannot resolve comes back as a 502 INTEGRATION_ERROR rather
+ * than a clean 404, so any non-200 is treated as "not confirmed", never as a
+ * failure of our own request.
+ */
+export async function lookupAccountName(params: {
+  accountCode: string;
+  accountNumber: string;
+  currency?: string;
+}): Promise<AccountNameLookupResult | null> {
+  const apiKey = process.env.WEWIRE_API_KEY;
+  const baseUrl = (process.env.WEWIRE_BASE_URL || 'https://stage-capi.wewireafrica.com').replace(/\/$/, '');
+
+  const accountCode = params.accountCode.trim().toUpperCase();
+  const accountNumber = params.accountNumber.trim();
+  const currency = (params.currency || 'GHS').trim().toUpperCase();
+
+  if (accountCode.length < 2 || accountNumber.length < 6) return null;
+  if (!apiKey) {
+    console.warn('WEWIRE_API_KEY is not configured; skipping account name lookup');
+    return null;
+  }
+
+  const cacheKey = `${currency}:${accountCode}:${accountNumber}`;
+  const cached = accountNameCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < ACCOUNT_NAME_TTL_MS) {
+    return cached.name
+      ? { accountName: cached.name, accountCode, accountNumber }
+      : null;
+  }
+
+  const query = new URLSearchParams({ currency, accountCode, accountNumber });
+
+  try {
+    const res = await fetch(`${baseUrl}/v1/account-lookup?${query}`, {
+      headers: { 'ww-api-key': apiKey, 'Content-Type': 'application/json' },
+    });
+
+    if (!res.ok) {
+      // Unknown account, wrong operator for the number, or the upstream rail
+      // being unavailable all land here. None of them is our error.
+      accountNameCache.set(cacheKey, { name: null, timestamp: Date.now() });
+      return null;
+    }
+
+    const data: any = await res.json();
+    const accountName = (data?.accountName ?? data?.name ?? '').toString().trim();
+    if (!accountName) {
+      accountNameCache.set(cacheKey, { name: null, timestamp: Date.now() });
+      return null;
+    }
+
+    accountNameCache.set(cacheKey, { name: accountName, timestamp: Date.now() });
+    return { accountName, accountCode, accountNumber };
+  } catch (err: any) {
+    console.warn('WeWire account name lookup failed:', err?.message || err);
+    return null;
+  }
+}

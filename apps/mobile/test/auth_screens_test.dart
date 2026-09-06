@@ -247,7 +247,8 @@ void main() {
       // First run picks the wallet currency before travel mode setup
       expect(find.byKey(const Key('wallet_currency_selection_screen')),
           findsOneWidget);
-      expect(find.text('What currency is your wallet in?'), findsOneWidget);
+      expect(find.text('What currency do you want your wallet in?'),
+          findsOneWidget);
     });
 
     testWidgets('Tapping Sign In link navigates to LoginScreen',

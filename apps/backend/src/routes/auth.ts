@@ -7,7 +7,7 @@ import {
   formatUser,
 } from '../lib/auth';
 import { authenticate } from '../middleware/auth';
-import { createWeWireSubCustomer, submitSimplifiedKyc } from '../lib/wewire';
+import { createWeWireSubCustomer } from '../lib/wewire';
 import {
   DEFAULT_WALLET_CURRENCY,
   normalizeWalletCurrency,
@@ -159,17 +159,6 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
 
       return user;
     });
-
-    // Optionally submit simplified/demo KYC in sandbox to move to IN_REVIEW
-    if (wewireSubcustomerId) {
-      submitSimplifiedKyc(wewireSubcustomerId, {
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        country: country ? String(country).trim() : null,
-      }).catch((kycErr) => {
-        console.warn('Background simplified KYC error:', kycErr);
-      });
-    }
 
     const token = generateToken({
       userId: newUser.id,

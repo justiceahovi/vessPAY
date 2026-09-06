@@ -5,6 +5,7 @@ dotenv.config();
 import app from '../src/index';
 import { prisma } from '../src/lib/db';
 import { generateToken } from '../src/lib/auth';
+import { ensureTestUsers } from './seed-test-users';
 import { getWeWireInstitutions, resolveInstitution } from '../src/lib/wewire';
 
 function fail(message: string, extra?: unknown): never {
@@ -47,21 +48,9 @@ async function main() {
   if (!rejected) fail('An unknown institution should be rejected');
   console.log('PASSED: codes, display names and operators all resolve; unknown names rejected\n');
 
-  // Existing user with a funded USD wallet (rule: do not create new users)
-  const user = await prisma.user.findFirst({
-    orderBy: { createdAt: 'asc' },
-    include: { wallets: true },
-  });
-  if (!user) fail('Need at least one existing user in the database');
-
-  const usdWallet = user.wallets.find((w) => w.currency === 'USD');
-  if (usdWallet) {
-    await prisma.wallet.update({ where: { id: usdWallet.id }, data: { balance: 100 } });
-  } else {
-    await prisma.wallet.create({
-      data: { userId: user.id, currency: 'USD', balance: 100 },
-    });
-  }
+  // Uses whatever user exists, with a wallet funded enough for the test payouts
+  const [user] = await ensureTestUsers({ count: 1, fundUsd: 100 });
+  if (!user) fail('Could not obtain a user to pay from');
 
   const token = generateToken({ userId: user.id, email: user.email });
   const server = app.listen(0);

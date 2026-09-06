@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../kyc/widgets/kyc_gate.dart';
 import '../../travel/widgets/traveling_in_indicator.dart';
 import '../models/wallet_currency_model.dart';
 import '../providers/currency_providers.dart';
@@ -17,8 +18,9 @@ class AddMoneyScreen extends ConsumerStatefulWidget {
 }
 
 class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
-  final TextEditingController _amountController =
-      TextEditingController(text: '100.00');
+  final TextEditingController _amountController = TextEditingController(
+    text: '100.00',
+  );
   final List<double> _quickAmounts = [25.0, 50.0, 100.0, 250.0, 500.0];
 
   @override
@@ -77,8 +79,11 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
         elevation: 0,
         leading: IconButton(
           key: const Key('add_money_back_button'),
-          icon: const Icon(Icons.arrow_back_ios_new,
-              size: 20, color: AppColors.ink),
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            size: 20,
+            color: AppColors.ink,
+          ),
           onPressed: () {
             ref.read(topupControllerProvider.notifier).reset();
             Navigator.of(context).maybePop();
@@ -95,32 +100,39 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
         ),
         centerTitle: true,
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Traveling In indicator
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.only(bottom: 16),
-                  child: TravelingInIndicator.compact(),
+      body: KycGate(
+        action: KycGatedAction.addMoney,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Traveling In indicator
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: 16),
+                    child: TravelingInIndicator.compact(),
+                  ),
                 ),
-              ),
 
-              // Switch view based on step
-              if (topupState.step == TopupStep.enterAmount ||
-                  topupState.step == TopupStep.initiating) ...[
-                _buildAmountEntrySection(ghsEquivalent, topupState.step == TopupStep.initiating),
-              ] else if (topupState.step == TopupStep.waitingConfirmation) ...[
-                _buildWaitingConfirmationSection(topupState),
-              ] else if (topupState.step == TopupStep.completed) ...[
-                _buildCompletedSection(topupState),
-              ] else if (topupState.step == TopupStep.failed) ...[
-                _buildFailedSection(topupState),
+                // Switch view based on step
+                if (topupState.step == TopupStep.enterAmount ||
+                    topupState.step == TopupStep.initiating) ...[
+                  _buildAmountEntrySection(
+                    ghsEquivalent,
+                    topupState.step == TopupStep.initiating,
+                  ),
+                ] else if (topupState.step ==
+                    TopupStep.waitingConfirmation) ...[
+                  _buildWaitingConfirmationSection(topupState),
+                ] else if (topupState.step == TopupStep.completed) ...[
+                  _buildCompletedSection(topupState),
+                ] else if (topupState.step == TopupStep.failed) ...[
+                  _buildFailedSection(topupState),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -156,7 +168,9 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.surfaceSoft,
                       borderRadius: BorderRadius.circular(100),
@@ -194,10 +208,12 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
                       key: const Key('add_money_amount_input'),
                       controller: _amountController,
                       keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
+                        decimal: true,
+                      ),
                       inputFormatters: [
                         FilteringTextInputFormatter.allow(
-                            RegExp(r'^\d+\.?\d{0,2}')),
+                          RegExp(r'^\d+\.?\d{0,2}'),
+                        ),
                       ],
                       onChanged: (_) => setState(() {}),
                       style: GoogleFonts.inter(
@@ -269,16 +285,14 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
               borderRadius: BorderRadius.circular(100),
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 8),
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppColors.primary
-                      : AppColors.surfaceSoft,
+                  color: isSelected ? AppColors.primary : AppColors.surfaceSoft,
                   borderRadius: BorderRadius.circular(100),
                   border: Border.all(
-                    color: isSelected
-                        ? AppColors.primary
-                        : AppColors.hairline,
+                    color: isSelected ? AppColors.primary : AppColors.hairline,
                   ),
                 ),
                 child: Text(
@@ -286,9 +300,7 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: isSelected
-                        ? AppColors.onPrimary
-                        : AppColors.ink,
+                    color: isSelected ? AppColors.onPrimary : AppColors.ink,
                   ),
                 ),
               ),
@@ -454,17 +466,29 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
             ),
             child: Column(
               children: [
-                _buildSummaryRow('Amount Expected',
-                    '${_currency.format(state.amount)} ${_currency.code}'),
+                _buildSummaryRow(
+                  'Amount Expected',
+                  '${_currency.format(state.amount)} ${_currency.code}',
+                ),
                 const Divider(color: AppColors.hairlineSoft, height: 16),
-                _buildSummaryRow('Status', 'PENDING (Awaiting settlement)', isHighlighted: true),
+                _buildSummaryRow(
+                  'Status',
+                  'PENDING (Awaiting settlement)',
+                  isHighlighted: true,
+                ),
                 if (resp != null) ...[
                   const Divider(color: AppColors.hairlineSoft, height: 16),
-                  _buildSummaryRow('Transaction ID', resp.fundingTransactionId.substring(0, 8)),
+                  _buildSummaryRow(
+                    'Transaction ID',
+                    resp.fundingTransactionId.substring(0, 8),
+                  ),
                 ],
                 if (account?.accountNumber != null) ...[
                   const Divider(color: AppColors.hairlineSoft, height: 16),
-                  _buildSummaryRow('Virtual Account', '${account!.bankName} (${account.accountNumber})'),
+                  _buildSummaryRow(
+                    'Virtual Account',
+                    '${account!.bankName} (${account.accountNumber})',
+                  ),
                 ],
               ],
             ),
@@ -657,7 +681,8 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            state.errorMessage ?? 'An error occurred while initiating your funding transaction.',
+            state.errorMessage ??
+                'An error occurred while initiating your funding transaction.',
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontFamily: 'StyreneB',
@@ -679,7 +704,11 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
     );
   }
 
-  Widget _buildSummaryRow(String label, String value, {bool isHighlighted = false}) {
+  Widget _buildSummaryRow(
+    String label,
+    String value, {
+    bool isHighlighted = false,
+  }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [

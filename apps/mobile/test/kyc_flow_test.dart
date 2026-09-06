@@ -6,16 +6,20 @@ import 'package:vesspay/core/routing/app_routes.dart';
 import 'package:vesspay/features/kyc/models/kyc_model.dart';
 import 'package:vesspay/features/kyc/repositories/kyc_repository.dart';
 import 'package:vesspay/features/kyc/screens/kyc_screen.dart';
+import 'package:vesspay/features/wallet/screens/add_money_screen.dart';
 
 class MockKycRepository implements KycRepository {
   final KycStatusModel status;
   final KycLinkModel link;
+  final KycStatusModel? demoSubmitResult;
   int getLinkCallCount = 0;
   int getStatusCallCount = 0;
+  int demoSubmitCallCount = 0;
 
   MockKycRepository({
     KycStatusModel? status,
     KycLinkModel? link,
+    this.demoSubmitResult,
   })  : status = status ??
             KycStatusModel(
               onboardingStatus: 'DRAFT',
@@ -37,6 +41,12 @@ class MockKycRepository implements KycRepository {
   Future<KycStatusModel> getKycStatus() async {
     getStatusCallCount++;
     return status;
+  }
+
+  @override
+  Future<KycStatusModel> submitDemoKyc() async {
+    demoSubmitCallCount++;
+    return demoSubmitResult ?? status;
   }
 }
 
@@ -148,6 +158,81 @@ void main() {
       // Should now be on KycScreen
       expect(find.text('WeWire Identity Verification'), findsOneWidget);
       expect(find.byKey(const Key('launch_kyc_button')), findsOneWidget);
+    });
+
+    testWidgets('An unverified user is nudged instead of shown the deposit form',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            kycRepositoryProvider.overrideWithValue(
+              MockKycRepository(
+                status: KycStatusModel(
+                  onboardingStatus: 'DRAFT',
+                  enhancedKycStatus: 'NOT_STARTED',
+                ),
+              ),
+            ),
+          ],
+          child: const MaterialApp(home: AddMoneyScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('kyc_gate_nudge')), findsOneWidget);
+      expect(find.text('One quick step first'), findsOneWidget);
+      expect(
+        find.textContaining('before you can add money to your wallet'),
+        findsOneWidget,
+      );
+      // The deposit form itself is not reachable
+      expect(find.byKey(const Key('add_money_amount_input')), findsNothing);
+    });
+
+    testWidgets('A verified user goes straight to the deposit form',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            kycRepositoryProvider.overrideWithValue(
+              MockKycRepository(
+                status: KycStatusModel(
+                  onboardingStatus: 'APPROVED',
+                  enhancedKycStatus: 'TIER_2',
+                ),
+              ),
+            ),
+          ],
+          child: const MaterialApp(home: AddMoneyScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('kyc_gate_nudge')), findsNothing);
+      expect(find.byKey(const Key('add_money_amount_input')), findsOneWidget);
+    });
+
+    testWidgets('A user in review is told to wait rather than nudged to start',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            kycRepositoryProvider.overrideWithValue(
+              MockKycRepository(
+                status: KycStatusModel(
+                  onboardingStatus: 'IN_REVIEW',
+                  enhancedKycStatus: 'NOT_STARTED',
+                ),
+              ),
+            ),
+          ],
+          child: const MaterialApp(home: AddMoneyScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Hang tight — we are reviewing your ID'), findsOneWidget);
+      expect(find.text('Check Verification Status'), findsOneWidget);
     });
   });
 }

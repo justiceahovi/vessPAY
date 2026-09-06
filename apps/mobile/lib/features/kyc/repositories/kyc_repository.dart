@@ -6,6 +6,10 @@ import '../models/kyc_model.dart';
 abstract class KycRepository {
   Future<KycLinkModel> getKycLink();
   Future<KycStatusModel> getKycStatus();
+
+  /// Demo-only shortcut: asks the backend to submit the canned KYC dossier for
+  /// this user. Only offered when [KycStatusModel.demoKycAvailable] is true.
+  Future<KycStatusModel> submitDemoKyc();
 }
 
 class ApiKycRepository implements KycRepository {
@@ -25,6 +29,14 @@ class ApiKycRepository implements KycRepository {
   Future<KycStatusModel> getKycStatus() async {
     return _apiClient.get(
       '/api/kyc/status',
+      fromJson: (data) => KycStatusModel.fromJson(data as Map<String, dynamic>),
+    );
+  }
+
+  @override
+  Future<KycStatusModel> submitDemoKyc() async {
+    return _apiClient.post(
+      '/api/kyc/demo-submit',
       fromJson: (data) => KycStatusModel.fromJson(data as Map<String, dynamic>),
     );
   }

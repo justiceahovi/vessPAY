@@ -424,6 +424,11 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
                         label: 'Recipient Name',
                         value: payData.recipientName,
                         valueKey: const Key('review_recipient_name'),
+                        // Carries the account-holder confirmation to the last
+                        // screen before the money moves
+                        trailing: payData.recipientNameVerified
+                            ? const _VerifiedNameBadge()
+                            : null,
                       ),
                     ],
                   ],
@@ -632,6 +637,7 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
     required String value,
     Key? valueKey,
     bool isBold = false,
+    Widget? trailing,
   }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -645,17 +651,59 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
             color: isBold ? AppColors.ink : AppColors.muted,
           ),
         ),
-        Text(
-          value,
-          key: valueKey,
-          style: TextStyle(
-            fontFamily: 'StyreneB',
-            fontSize: isBold ? 15 : 13,
-            fontWeight: isBold ? FontWeight.w700 : FontWeight.w600,
-            color: isBold ? AppColors.primary : AppColors.ink,
-          ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              value,
+              key: valueKey,
+              style: TextStyle(
+                fontFamily: 'StyreneB',
+                fontSize: isBold ? 15 : 13,
+                fontWeight: isBold ? FontWeight.w700 : FontWeight.w600,
+                color: isBold ? AppColors.primary : AppColors.ink,
+              ),
+            ),
+            if (trailing != null) ...[
+              const SizedBox(width: 8),
+              trailing,
+            ],
+          ],
         ),
       ],
+    );
+  }
+}
+
+/// Marks a recipient name the operator or bank confirmed.
+class _VerifiedNameBadge extends StatelessWidget {
+  const _VerifiedNameBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('review_recipient_name_verified'),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.semanticUp.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(100),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.verified_rounded, size: 12, color: AppColors.semanticUp),
+          SizedBox(width: 4),
+          Text(
+            'Verified',
+            style: TextStyle(
+              fontFamily: 'StyreneB',
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: AppColors.semanticUp,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -15,7 +15,46 @@ class KycScreen extends ConsumerStatefulWidget {
 
 class _KycScreenState extends ConsumerState<KycScreen> {
   bool _isLaunching = false;
+  bool _isSubmittingDemo = false;
   String? _errorMessage;
+
+  /// Demo shortcut: submits the canned KYC dossier for this user. Registration
+  /// no longer does this silently, so a human has to ask for it here.
+  Future<void> _submitDemoKyc() async {
+    setState(() {
+      _isSubmittingDemo = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await ref.read(kycRepositoryProvider).submitDemoKyc();
+      ref.invalidate(kycStatusProvider);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Demo KYC submitted. Approval usually lands within a few minutes — '
+              'tap Check Verification Status to refresh.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceFirst('Exception: ', '');
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmittingDemo = false;
+        });
+      }
+    }
+  }
 
   Future<void> _launchHostedKyc() async {
     setState(() {
@@ -312,6 +351,50 @@ class _KycScreenState extends ConsumerState<KycScreen> {
                   ),
                 ),
 
+                // Demo-only shortcut, hidden unless the backend offers it and
+                // the user is not already verified.
+                if (_showDemoKycButton(statusAsync)) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: TextButton(
+                      key: const Key('demo_kyc_button'),
+                      onPressed: _isSubmittingDemo ? null : _submitDemoKyc,
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.muted,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: _isSubmittingDemo
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.muted,
+                              ),
+                            )
+                          : const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.bolt_outlined, size: 16),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Demo: Auto-Submit KYC',
+                                  style: TextStyle(
+                                    fontFamily: 'StyreneB',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 24),
 
                 // Regulatory footer
@@ -340,15 +423,25 @@ class _KycScreenState extends ConsumerState<KycScreen> {
     );
   }
 
+  /// The demo shortcut only appears when the backend advertises it and there is
+  /// still something to verify.
+  bool _showDemoKycButton(AsyncValue<KycStatusModel> statusAsync) {
+    final status = statusAsync.valueOrNull;
+    return status != null && status.demoKycAvailable && !status.isApproved;
+  }
+
   Widget _buildStatusCard(KycStatusModel status) {
     final isVerified = status.isApproved;
     final isInReview = status.isInReview;
+    final isRejected = status.isRejected;
 
     final badgeColor = isVerified
         ? AppColors.success
         : isInReview
             ? AppColors.accentAmber
-            : AppColors.primary;
+            : isRejected
+                ? AppColors.error
+                : AppColors.primary;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -370,7 +463,9 @@ class _KycScreenState extends ConsumerState<KycScreen> {
                   ? Icons.check_circle_outline
                   : isInReview
                       ? Icons.hourglass_top_outlined
-                      : Icons.pending_actions_outlined,
+                      : isRejected
+                          ? Icons.gpp_bad_outlined
+                          : Icons.pending_actions_outlined,
               color: badgeColor,
               size: 24,
             ),
@@ -415,7 +510,9 @@ class _KycScreenState extends ConsumerState<KycScreen> {
                       ? 'Identity verified. All African payout corridors active.'
                       : isInReview
                           ? 'Verification in review. You will be notified shortly.'
-                          : 'Identity verification outstanding.',
+                          : isRejected
+                              ? 'Verification declined. Please re-submit your documents.'
+                              : 'Identity verification outstanding.',
                   style: const TextStyle(
                     fontFamily: 'StyreneB',
                     fontSize: 14,
