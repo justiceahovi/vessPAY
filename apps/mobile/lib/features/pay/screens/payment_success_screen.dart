@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/routing/app_routes.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../wallet/providers/wallet_providers.dart';
 import '../models/transaction_model.dart';
 import '../providers/pay_anyone_providers.dart';
 import '../providers/recent_activity_provider.dart';
@@ -19,14 +20,16 @@ class PaymentSuccessScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Invalidate transaction list cache so the newly completed payment appears immediately
+    // Invalidate transaction list and wallet balance so the completed payment
+    // and debited balance appear immediately, without a manual refresh.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.invalidate(userTransactionsProvider);
+      ref.invalidate(walletBalancesProvider);
     });
 
     final tx = transaction;
     final recipient = tx.recipientName ?? 'Recipient';
-    final totalUsd = tx.sourceAmount + tx.fee;
+    final totalUsd = tx.sourceAmount + tx.fee + tx.wewireFee;
 
     return PopScope(
       canPop: false,

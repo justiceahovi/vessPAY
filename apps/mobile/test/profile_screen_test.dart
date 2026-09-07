@@ -53,6 +53,14 @@ class TestMockAuthRepository implements AuthRepository {
   }) async => throw UnimplementedError();
 
   @override
+  Future<UserModel> updateProfile({
+    String? firstName,
+    String? lastName,
+    String? country,
+    String? nationality,
+  }) async => throw UnimplementedError();
+
+  @override
   Future<void> logout() async {}
 }
 

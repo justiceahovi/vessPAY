@@ -15,6 +15,7 @@ import '../../features/pay/screens/payment_failure_screen.dart';
 import '../../features/pay/screens/transaction_list_screen.dart';
 import '../../features/pay/screens/transaction_detail_screen.dart';
 import '../../features/placeholders/placeholder_screens.dart';
+import '../../features/profile/screens/edit_profile_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../features/splash/screens/splash_screen.dart';
 import '../navigation/main_app_shell.dart';
@@ -82,6 +83,11 @@ GoRouter createAppRouter({
             path: AppRoutes.profile,
             name: 'profile',
             builder: (context, state) => const ProfileScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.editProfile,
+            name: 'edit-profile',
+            builder: (context, state) => const EditProfileScreen(),
           ),
           GoRoute(
             path: AppRoutes.kycVerification,

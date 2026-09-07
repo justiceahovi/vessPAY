@@ -19,5 +19,6 @@ class AppRoutes {
   static const String transactionList = '/transactions';
   static const String transactionDetail = '/transactions/detail';
   static const String profile = '/profile';
+  static const String editProfile = '/profile/edit';
 }
 

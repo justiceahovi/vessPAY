@@ -484,6 +484,16 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
                       valueKey: const Key('review_total'),
                       isBold: true,
                     ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'A small network fee may apply on top of this total and will show on your receipt once the payment completes.',
+                      key: Key('review_network_fee_notice'),
+                      style: TextStyle(
+                        fontFamily: 'StyreneB',
+                        fontSize: 12,
+                        color: AppColors.muted,
+                      ),
+                    ),
                   ],
                 ),
               ),

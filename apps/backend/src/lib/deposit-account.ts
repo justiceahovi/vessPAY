@@ -46,7 +46,7 @@ function requiresSourceOfFunds(currency: string): boolean {
 
 const APPROVED_KYC = new Set(['APPROVED', 'VERIFIED', 'ACTIVE', 'COMPLETED']);
 
-function isEnhancedApproved(value: string): boolean {
+export function isEnhancedApproved(value: string): boolean {
   const v = (value || '').trim().toUpperCase();
   return APPROVED_KYC.has(v) || v.startsWith('TIER_');
 }

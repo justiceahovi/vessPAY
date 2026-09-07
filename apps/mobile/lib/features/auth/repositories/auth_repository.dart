@@ -21,6 +21,16 @@ abstract class AuthRepository {
 
   Future<UserModel> getProfile();
 
+  /// Updates a subset of the current user's own profile. Only non-null
+  /// fields are sent; `country`/`nationality` are rejected by the backend
+  /// once identity verification is approved.
+  Future<UserModel> updateProfile({
+    String? firstName,
+    String? lastName,
+    String? country,
+    String? nationality,
+  });
+
   Future<void> logout();
 }
 
@@ -88,6 +98,29 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<UserModel> getProfile() async {
     return await _apiClient.get<UserModel>(
       '/api/auth/me',
+      fromJson: (data) {
+        final map = data as Map<String, dynamic>;
+        return UserModel.fromJson(map['user'] as Map<String, dynamic>);
+      },
+    );
+  }
+
+  @override
+  Future<UserModel> updateProfile({
+    String? firstName,
+    String? lastName,
+    String? country,
+    String? nationality,
+  }) async {
+    final data = <String, dynamic>{};
+    if (firstName != null) data['firstName'] = firstName;
+    if (lastName != null) data['lastName'] = lastName;
+    if (country != null) data['country'] = country;
+    if (nationality != null) data['nationality'] = nationality;
+
+    return await _apiClient.put<UserModel>(
+      '/api/auth/me',
+      data: data,
       fromJson: (data) {
         final map = data as Map<String, dynamic>;
         return UserModel.fromJson(map['user'] as Map<String, dynamic>);

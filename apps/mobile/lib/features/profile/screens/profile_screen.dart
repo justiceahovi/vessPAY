@@ -288,6 +288,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   initials: initials,
                   corridorName: corridorName,
                   flagEmoji: flagEmoji,
+                  onEditProfile: () => context.push(AppRoutes.editProfile),
                 ),
                 const SizedBox(height: 18),
 
@@ -355,6 +356,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     required String initials,
     required String corridorName,
     required String flagEmoji,
+    required VoidCallback onEditProfile,
   }) {
     return Container(
       key: const Key('profile_header_card'),
@@ -445,16 +447,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           const SizedBox(height: 14),
 
           // User Full Name
-          Text(
-            displayName,
-            key: const Key('profile_user_name'),
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: AppColors.ink,
-              letterSpacing: -0.4,
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  displayName,
+                  key: const Key('profile_user_name'),
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink,
+                    letterSpacing: -0.4,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              InkWell(
+                key: const Key('profile_edit_button'),
+                onTap: onEditProfile,
+                borderRadius: BorderRadius.circular(100),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.edit_outlined,
+                    size: 16,
+                    color: AppColors.muted,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 4),
 

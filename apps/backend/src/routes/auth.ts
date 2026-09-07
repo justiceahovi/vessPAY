@@ -13,6 +13,7 @@ import {
   normalizeWalletCurrency,
   supportedCurrencyCodes,
 } from '../lib/currencies';
+import { isEnhancedApproved } from '../lib/deposit-account';
 
 const router = Router();
 
@@ -265,6 +266,83 @@ router.get('/me', authenticate, async (req: Request, res: Response): Promise<voi
   res.status(200).json({
     user: formatUser(req.user!),
   });
+});
+
+/**
+ * PUT /api/auth/me
+ * Updates a subset of the authenticated user's own profile details.
+ *
+ * `country`/`nationality` are only editable before identity verification is
+ * approved: once WeWire has an enhanced-KYC-approved sub-customer on file for
+ * this user, those fields must not silently diverge from what was verified.
+ */
+router.put('/me', authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = req.user!;
+    const { firstName, lastName, country, nationality } = req.body;
+
+    const data: {
+      firstName?: string;
+      lastName?: string;
+      country?: string | null;
+      nationality?: string | null;
+    } = {};
+
+    if (firstName !== undefined) {
+      if (typeof firstName !== 'string' || !firstName.trim()) {
+        res.status(400).json({
+          error: { code: 'VALIDATION_ERROR', message: 'First name cannot be empty' },
+        });
+        return;
+      }
+      data.firstName = firstName.trim();
+    }
+
+    if (lastName !== undefined) {
+      if (typeof lastName !== 'string' || !lastName.trim()) {
+        res.status(400).json({
+          error: { code: 'VALIDATION_ERROR', message: 'Last name cannot be empty' },
+        });
+        return;
+      }
+      data.lastName = lastName.trim();
+    }
+
+    const changingCountry = country !== undefined && String(country ?? '').trim() !== (user.country ?? '');
+    const changingNationality =
+      nationality !== undefined && String(nationality ?? '').trim() !== (user.nationality ?? '');
+
+    if (changingCountry || changingNationality) {
+      if (isEnhancedApproved(user.enhancedKycStatus ?? '')) {
+        res.status(409).json({
+          error: {
+            code: 'KYC_LOCKED',
+            message:
+              'Country and nationality cannot be changed after identity verification. Contact support if these are incorrect.',
+          },
+        });
+        return;
+      }
+      if (country !== undefined) {
+        data.country = String(country ?? '').trim() || null;
+      }
+      if (nationality !== undefined) {
+        data.nationality = String(nationality ?? '').trim() || null;
+      }
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data,
+    });
+
+    res.status(200).json({ user: formatUser(updated) });
+  } catch (err: any) {
+    console.error('Error updating profile:', err);
+    res.status(500).json({
+      error: { code: 'INTERNAL_ERROR', message: 'Failed to update profile' },
+    });
+  }
 });
 
 export default router;

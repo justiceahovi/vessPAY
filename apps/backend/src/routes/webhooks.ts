@@ -319,7 +319,10 @@ router.post('/wewire', async (req: Request, res: Response): Promise<void> => {
               });
 
               // Debit user's source wallet ledger on transition to COMPLETED (T5.4)
-              const totalDebit = Number(localTx.sourceAmount) + Number(localTx.fee);
+              // Includes WeWire's own disbursement fee (localTx.wewireFee), passed on
+              // to the user rather than absorbed by vessPay.
+              const totalDebit =
+                Number(localTx.sourceAmount) + Number(localTx.fee) + Number(localTx.wewireFee || 0);
               const wallet = await tx.wallet.findFirst({
                 where: {
                   userId: localTx.userId,

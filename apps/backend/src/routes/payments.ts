@@ -557,10 +557,15 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
     // 8. Store returned wewire_transaction_id and move local transaction to PENDING
     // Per Section 9: Do NOT mark COMPLETED here — that only happens via webhook (T5.4)
     // Wallet ledger debit also happens on transition to COMPLETED via webhook (T5.4)
+    // WeWire's own disbursement fee (only known once they've processed the request)
+    // is recorded here so it gets passed on to the user's debit instead of vessPay
+    // absorbing it -- see webhooks.ts totalDebit calculation.
+    const wewireFee = disbursementResult.fee ? Number(disbursementResult.fee) : 0;
     const updatedTx = await prisma.transaction.update({
       where: { id: transaction.id },
       data: {
         wewireTransactionId: disbursementResult.wewireTransactionId,
+        wewireFee: isNaN(wewireFee) ? 0 : wewireFee,
         status: 'PENDING',
       },
     });
@@ -589,6 +594,10 @@ export function formatTransactionDetail(tx: any) {
   const sourceAmount = typeof tx.sourceAmount === 'number' ? tx.sourceAmount : Number(tx.sourceAmount);
   const destinationAmount = typeof tx.destinationAmount === 'number' ? tx.destinationAmount : Number(tx.destinationAmount);
   const fee = typeof tx.fee === 'number' ? tx.fee : Number(tx.fee);
+  const wewireFee = tx.wewireFee !== undefined && tx.wewireFee !== null
+    ? (typeof tx.wewireFee === 'number' ? tx.wewireFee : Number(tx.wewireFee))
+    : 0;
+  const totalFee = Number((fee + wewireFee).toFixed(2));
   const exchangeRate = typeof tx.exchangeRate === 'number' ? tx.exchangeRate : Number(tx.exchangeRate);
   const createdAtIso = tx.createdAt instanceof Date ? tx.createdAt.toISOString() : String(tx.createdAt);
   const updatedAtIso = tx.updatedAt instanceof Date ? tx.updatedAt.toISOString() : String(tx.updatedAt);
@@ -604,6 +613,8 @@ export function formatTransactionDetail(tx: any) {
     destinationCurrency: tx.destinationCurrency,
     destinationAmount,
     fee,
+    wewireFee,
+    totalFee,
     exchangeRate,
     rate: exchangeRate,
     recipient: {

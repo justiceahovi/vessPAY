@@ -11,6 +11,10 @@ class TransactionModel {
   final String destinationCurrency;
   final double destinationAmount;
   final double fee;
+
+  /// WeWire's own disbursement fee, passed on to the user rather than
+  /// absorbed by vessPay. Zero for deposits and for payouts predating this.
+  final double wewireFee;
   final double exchangeRate;
 
   /// Deposits only: what the rails actually delivered, null while in flight.
@@ -33,6 +37,7 @@ class TransactionModel {
     required this.destinationCurrency,
     required this.destinationAmount,
     required this.fee,
+    this.wewireFee = 0.0,
     required this.exchangeRate,
     this.settledAmount,
     this.recipientName,
@@ -69,6 +74,7 @@ class TransactionModel {
                   ?.toDouble() ??
               0.0,
       fee: (json['fee'] as num?)?.toDouble() ?? 0.0,
+      wewireFee: (json['wewireFee'] ?? json['wewire_fee'] as num?)?.toDouble() ?? 0.0,
       exchangeRate:
           (json['exchangeRate'] ?? json['exchange_rate'] ?? json['rate'] as num?)?.toDouble() ??
               1.0,

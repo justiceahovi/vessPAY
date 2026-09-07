@@ -158,6 +158,7 @@ model Transaction {
   destinationCurrency String   @map("destination_currency")
   destinationAmount   Decimal  @map("destination_amount") @db.Decimal(14, 2)
   fee                 Decimal  @db.Decimal(14, 2)
+  wewireFee           Decimal  @default(0.00) @map("wewire_fee") @db.Decimal(14, 2)
   exchangeRate        Decimal  @map("exchange_rate") @db.Decimal(14, 6)
   recipientName       String?  @map("recipient_name")
   recipientPhone      String?  @map("recipient_phone")

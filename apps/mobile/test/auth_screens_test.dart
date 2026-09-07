@@ -62,6 +62,19 @@ class FakeAuthRepository implements AuthRepository {
   Future<UserModel> getProfile() async => mockUser;
 
   @override
+  Future<UserModel> updateProfile({
+    String? firstName,
+    String? lastName,
+    String? country,
+    String? nationality,
+  }) async {
+    if (shouldFail) {
+      throw ApiException(code: failCode, message: failMessage);
+    }
+    return mockUser;
+  }
+
+  @override
   Future<void> logout() async {
     await tokenStorage.deleteToken();
   }

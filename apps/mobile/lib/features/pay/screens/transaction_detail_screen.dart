@@ -127,7 +127,7 @@ class TransactionDetailScreen extends ConsumerWidget {
 
   Widget _buildScaffold(BuildContext context, TransactionModel tx) {
     final isDeposit = tx.isDeposit;
-    final totalUsd = tx.sourceAmount + tx.fee;
+    final totalUsd = tx.sourceAmount + tx.fee + tx.wewireFee;
     final recipientName = tx.recipientName ?? 'Recipient';
     final fallbackPrefix = isDeposit ? 'VP-DEP' : 'VP-PAY';
     final vesspayRef = tx.vesspayReference ?? '$fallbackPrefix-${tx.id.substring(0, tx.id.length >= 8 ? 8 : tx.id.length).toUpperCase()}';
@@ -317,7 +317,7 @@ class TransactionDetailScreen extends ConsumerWidget {
           Text(
             tx.isDeposit
                 ? _depositHeroSubtitle(tx)
-                : '-\$${(tx.sourceAmount + tx.fee).toStringAsFixed(2)} USD total debited',
+                : '-\$${(tx.sourceAmount + tx.fee + tx.wewireFee).toStringAsFixed(2)} USD total debited',
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontFamily: 'StyreneB',
@@ -536,6 +536,10 @@ class TransactionDetailScreen extends ConsumerWidget {
           _buildRowItem('You Sent (Subtotal)', '\$${tx.sourceAmount.toStringAsFixed(2)} USD'),
           const SizedBox(height: 10),
           _buildRowItem('VessPay Fee (1%)', '\$${tx.fee.toStringAsFixed(2)} USD'),
+          if (tx.wewireFee > 0) ...[
+            const SizedBox(height: 10),
+            _buildRowItem('Network Fee', '\$${tx.wewireFee.toStringAsFixed(2)} USD'),
+          ],
           const SizedBox(height: 10),
           _buildRowItem('Exchange Rate', '1 USD = ${tx.exchangeRate.toStringAsFixed(2)} ${tx.destinationCurrency}'),
           const SizedBox(height: 10),
@@ -718,9 +722,9 @@ Status: ${tx.status}
 Recipient: ${tx.recipientName ?? 'Recipient'} (${tx.recipientPhone ?? ''})
 Network: ${tx.network ?? ''}
 Amount Delivered: ${tx.destinationCurrency} ${tx.destinationAmount.toStringAsFixed(2)}
-Amount Debited: \$${(tx.sourceAmount + tx.fee).toStringAsFixed(2)} USD
+Amount Debited: \$${(tx.sourceAmount + tx.fee + tx.wewireFee).toStringAsFixed(2)} USD
 Rate: 1 USD = ${tx.exchangeRate.toStringAsFixed(2)} ${tx.destinationCurrency}
-Fee: \$${tx.fee.toStringAsFixed(2)} USD
+Fee: \$${tx.fee.toStringAsFixed(2)} USD${tx.wewireFee > 0 ? '\nNetwork Fee: \$${tx.wewireFee.toStringAsFixed(2)} USD' : ''}
 Date: ${tx.formattedDate}
 ---------------------------
 Sent seamlessly via VessPay
