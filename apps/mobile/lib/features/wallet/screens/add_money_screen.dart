@@ -600,14 +600,14 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
                       .read(topupControllerProvider.notifier)
                       .simulateWeWireDeposit(resp.fundingTransactionId);
                 },
-                //icon: const Icon(Icons.bolt, size: 20),
-                //label: Text(
-                 // 'Simulate Bank Deposit (${_currency.format(state.amount)})',
-                 // style: GoogleFonts.inter(
-                 //   fontSize: 14,
-                 //   fontWeight: FontWeight.w600,
-                 // ),
-               // ),
+                icon: const Icon(Icons.bolt, size: 20),
+                label: Text(
+                  'Simulate Bank Deposit (${_currency.format(state.amount)})',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: AppColors.onPrimary,

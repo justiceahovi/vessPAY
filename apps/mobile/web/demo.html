@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VessPay — Demo</title>
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #0e1116;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 48px;
+      flex-wrap: wrap;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    .caption {
+      color: #8b93a3;
+      max-width: 280px;
+      line-height: 1.6;
+      font-size: 15px;
+    }
+    .caption h1 {
+      color: #fff;
+      font-size: 24px;
+      margin: 0 0 12px;
+      letter-spacing: -0.02em;
+    }
+    .caption p { margin: 0 0 10px; }
+    .phone {
+      width: 390px;
+      height: 844px;
+      border-radius: 44px;
+      padding: 10px;
+      background: #1b1f27;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, .6), 0 0 0 2px #2c323d;
+      flex: none;
+    }
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      border-radius: 34px;
+      display: block;
+      background: #fff;
+    }
+    /* On real phones, drop the frame and let the app fill the screen. */
+    @media (max-width: 900px) {
+      html, body { display: block; background: #fff; }
+      .caption { display: none; }
+      .phone {
+        width: 100%;
+        height: 100%;
+        padding: 0;
+        border-radius: 0;
+        box-shadow: none;
+        background: #fff;
+      }
+      iframe { border-radius: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="caption">
+    <h1>VessPay</h1>
+    <p>Cross-border payouts to Ghana Mobile Money.</p>
+    <p>Sandbox environment — no real funds move.</p>
+  </div>
+  <div class="phone">
+    <iframe src="index.html" title="VessPay"></iframe>
+  </div>
+</body>
+</html>
