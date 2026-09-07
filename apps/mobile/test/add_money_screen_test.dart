@@ -40,6 +40,13 @@ class MockWalletRepositoryForAddMoney implements WalletRepository {
   Future<CryptoAddressModel> getCryptoAddress(String chain) async =>
       CryptoAddressModel.unavailable(chain, 'not stubbed');
 
+  @override
+  Future<void> cancelTopup(String fundingTransactionId) async {
+    cancelledTopupIds.add(fundingTransactionId);
+  }
+
+  final List<String> cancelledTopupIds = [];
+
   /// Last funding transaction a WeWire sandbox deposit was requested for.
   String? simulatedDepositFor;
 
@@ -337,7 +344,7 @@ void main() {
       expect(find.text('View Updated Wallet'), findsOneWidget);
     });
 
-    testWidgets('Home screen Add Money button routes directly to AddMoneyScreen',
+    testWidgets('Home screen Add Money button opens the method choice, then the bank flow',
         (tester) async {
       final mockRepo = MockWalletRepositoryForAddMoney();
       final router = createAppRouter(initialLocation: AppRoutes.home);
@@ -362,9 +369,73 @@ void main() {
       await tester.tap(addMoneyBtn);
       await tester.pumpAndSettle();
 
+      // The rails are asked about before any amount is: crypto has no amount
+      // to declare, and is not gated on a fiat deposit account.
+      expect(find.byKey(const Key('deposit_method_screen')), findsOneWidget);
+      expect(find.byKey(const Key('deposit_method_bank')), findsOneWidget);
+      expect(find.byKey(const Key('deposit_method_crypto')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('deposit_method_bank')));
+      await tester.pumpAndSettle();
+
       // Now on AddMoneyScreen
       expect(find.byKey(const Key('add_money_amount_input')), findsOneWidget);
-      expect(find.text('Add Money'), findsOneWidget);
+      expect(find.text('Add Money'), findsWidgets);
+    });
+
+    testWidgets('A pending deposit can be cancelled to start a different one',
+        (tester) async {
+      // Without this the restored deposit is a trap: it reopens on every visit,
+      // for an amount the user may no longer want, with no way past it.
+      final mockRepo = MockWalletRepositoryForAddMoney();
+      mockRepo.pendingTopup = const TopupResponseModel(
+        fundingTransactionId: 'ftx-cancel-1',
+        checkoutId: 'chk-cancel-1',
+        status: 'PENDING',
+        amount: 100.0,
+        currency: 'USD',
+        accountSource: 'wewire',
+        accountDetails: TopupAccountDetails(
+          bankName: 'WeWire Treasury Bank',
+          accountNumber: '123456789',
+        ),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            walletRepositoryProvider.overrideWithValue(mockRepo),
+            kycRepositoryProvider.overrideWithValue(VerifiedKycRepository()),
+          ],
+          child: const MaterialApp(home: AddMoneyScreen()),
+        ),
+      );
+
+      // The waiting step spins, so settle by pumping rather than pumpAndSettle.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final cancelButton = find.byKey(const Key('add_money_cancel_deposit_button'));
+      expect(cancelButton, findsOneWidget);
+
+      await tester.ensureVisible(cancelButton);
+      await tester.tap(cancelButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Confirmed first: money already sent still arrives, and the user has to
+      // be told that before deciding.
+      expect(find.byKey(const Key('cancel_deposit_dialog')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('cancel_deposit_confirm_button')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // The server was told, so reopening will not restore it again.
+      expect(mockRepo.cancelledTopupIds, contains('ftx-cancel-1'));
+
+      // And the user is back on amount entry, free to choose a new figure.
+      expect(find.byKey(const Key('add_money_amount_input')), findsOneWidget);
     });
   });
 }

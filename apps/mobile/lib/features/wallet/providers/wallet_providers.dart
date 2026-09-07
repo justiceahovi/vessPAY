@@ -159,6 +159,32 @@ class TopupNotifier extends StateNotifier<TopupState> {
     state = const TopupState();
   }
 
+  /// Abandons the deposit currently being waited on and returns to amount entry.
+  ///
+  /// [reset] alone would not do: the deposit stays PENDING on the server, and
+  /// [restorePendingTopup] would drag the user straight back to the waiting
+  /// screen next time they open Add Money. Cancelling server-side is what
+  /// actually lets them start a deposit for a different amount.
+  Future<bool> cancelPendingTopup() async {
+    final id = state.response?.fundingTransactionId;
+    if (id == null) {
+      reset();
+      return true;
+    }
+
+    try {
+      await _repository.cancelTopup(id);
+      _stopPolling();
+      state = const TopupState();
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        errorMessage: 'Could not cancel this deposit. Please try again.',
+      );
+      return false;
+    }
+  }
+
   /// Picks a deposit back up where the user left it.
   ///
   /// A top-up lives on the backend as a PENDING funding transaction, but this

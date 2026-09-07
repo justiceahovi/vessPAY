@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/api/api_error.dart';
 import '../../../core/providers.dart';
 import '../../pay/models/transaction_model.dart';
 import '../models/crypto_deposit_model.dart';
@@ -36,6 +37,10 @@ abstract class WalletRepository {
     String currency = kDefaultWalletCurrency,
   });
   Future<TopupResponseModel> getTopupStatus(String fundingTransactionId);
+
+  /// Abandons a deposit the user started but never funded, so they can start a
+  /// different one. Cannot stop money already in flight.
+  Future<void> cancelTopup(String fundingTransactionId);
 
   /// The deposit the user still has in flight for [currency], or null when
   /// there is none. A top-up outlives the screen that started it, so this is
@@ -125,12 +130,25 @@ class ApiWalletRepository implements WalletRepository {
 
   @override
   Future<CryptoAddressModel> getCryptoAddress(String chain) async {
-    return _apiClient.get<CryptoAddressModel>(
-      '/api/wallet/crypto-address',
-      queryParameters: {'chain': chain},
-      fromJson: (data) =>
-          CryptoAddressModel.fromJson(data as Map<String, dynamic>),
-    );
+    try {
+      return await _apiClient.get<CryptoAddressModel>(
+        '/api/wallet/crypto-address',
+        queryParameters: {'chain': chain},
+        fromJson: (data) =>
+            CryptoAddressModel.fromJson(data as Map<String, dynamic>),
+      );
+    } on ApiException catch (e) {
+      // "Finish verifying first" is an answer, not a failure. Letting it throw
+      // would put a raw exception string in front of the user where a next
+      // step belongs.
+      if (e.code == 'SUBCUSTOMER_REQUIRED') {
+        return CryptoAddressModel.verificationRequired(chain);
+      }
+      if (e.code == 'ADDRESS_UNAVAILABLE' || e.code == 'INVALID_CHAIN') {
+        return CryptoAddressModel.unavailable(chain, e.message);
+      }
+      rethrow;
+    }
   }
 
   @override
@@ -192,6 +210,14 @@ class ApiWalletRepository implements WalletRepository {
             ? TopupResponseModel.fromJson(pending)
             : null;
       },
+    );
+  }
+
+  @override
+  Future<void> cancelTopup(String fundingTransactionId) async {
+    await _apiClient.post<void>(
+      '/api/wallet/topup/$fundingTransactionId/cancel',
+      fromJson: (_) {},
     );
   }
 

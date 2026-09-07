@@ -71,6 +71,9 @@ class NavMockWalletRepository implements WalletRepository {
   Future<CryptoAddressModel> getCryptoAddress(String chain) async =>
       CryptoAddressModel.unavailable(chain, 'not stubbed');
 
+  @override
+  Future<void> cancelTopup(String fundingTransactionId) async {}
+
   /// Last funding transaction a WeWire sandbox deposit was requested for.
   String? simulatedDepositFor;
 

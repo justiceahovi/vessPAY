@@ -161,5 +161,40 @@ void main() {
       expect(find.text('Creating your Base address'), findsOneWidget);
       expect(find.byKey(const Key('crypto_copy_address_button')), findsNothing);
     });
+
+    testWidgets('an unverified user gets a next step, not a raw error',
+        (tester) async {
+      // The backend answers 409 SUBCUSTOMER_REQUIRED. That is an answer, not a
+      // failure: showing the exception string would strand the user.
+      await tester.pumpWidget(wrap(
+        chains: const [_baseChain],
+        address: CryptoAddressModel.verificationRequired('BASE'),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('crypto_verification_required')), findsOneWidget);
+      expect(find.text('Verify your identity first'), findsOneWidget);
+      expect(find.byKey(const Key('crypto_verify_identity_button')), findsOneWidget);
+      expect(find.byKey(const Key('crypto_deposit_address_text')), findsNothing);
+      expect(find.byKey(const Key('crypto_address_provisioning')), findsNothing);
+    });
+
+    testWidgets('an unavailable corridor states the reason it gave',
+        (tester) async {
+      await tester.pumpWidget(wrap(
+        chains: const [_baseChain],
+        address: CryptoAddressModel.unavailable(
+          'BASE',
+          'Crypto deposit addresses are not available right now',
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Crypto deposit addresses are not available right now'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('crypto_copy_address_button')), findsNothing);
+    });
   });
 }

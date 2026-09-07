@@ -405,6 +405,54 @@ function findPendingTopup(userId: string, currency: string, amount?: number) {
 }
 
 /**
+ * How long an unfunded deposit intent stays current, in hours.
+ *
+ * A bank transfer that was going to arrive has arrived well inside a day, so a
+ * deposit still unfunded after this is one the user walked away from.
+ */
+const TOPUP_EXPIRY_HOURS = 24;
+
+function topupExpiryHours(): number {
+  const raw = process.env.TOPUP_EXPIRY_HOURS;
+  const parsed = raw ? parseFloat(raw) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : TOPUP_EXPIRY_HOURS;
+}
+
+/**
+ * Retires deposit intents the user never funded.
+ *
+ * Without this, every abandoned deposit stays PENDING forever and Add Money
+ * keeps restoring the oldest one, so a user works through a queue of stale
+ * intents one cancellation at a time.
+ *
+ * EXPIRED is a UI state, not an accounting one: the row stays matchable by the
+ * pay-in webhook. Someone who set up a transfer on Monday and actually sent it
+ * on Wednesday must still be credited, so expiry stops us *offering* the
+ * deposit, never stops us *receiving* it.
+ */
+async function expireStaleTopups(userId: string): Promise<number> {
+  const cutoff = new Date(Date.now() - topupExpiryHours() * 60 * 60 * 1000);
+
+  const { count } = await prisma.fundingTransaction.updateMany({
+    where: {
+      userId,
+      status: 'PENDING',
+      createdAt: { lt: cutoff },
+    },
+    data: { status: 'EXPIRED' },
+  });
+
+  if (count > 0) {
+    console.log(
+      `[Wallet] Expired ${count} unfunded deposit intent(s) for user ${userId} ` +
+        `older than ${topupExpiryHours()}h. They remain creditable if the money still arrives.`
+    );
+  }
+
+  return count;
+}
+
+/**
  * The user's WeWire virtual account for a currency, or null when there is none
  * to resolve. A deposit is still reportable without it, so an unreachable
  * WeWire is warned about rather than thrown.
@@ -535,6 +583,9 @@ router.get('/topup/pending', authenticate, async (req: Request, res: Response): 
       ? rawCurrency.trim().toUpperCase()
       : (user.primaryCurrency || DEFAULT_WALLET_CURRENCY);
 
+    // Retire anything the user walked away from before offering to resume it.
+    await expireStaleTopups(user.id);
+
     const fundingTx = await findPendingTopup(user.id, currency);
     if (!fundingTx) {
       res.status(200).json({ pending: null });
@@ -603,6 +654,85 @@ router.get('/topup/:id', authenticate, async (req: Request, res: Response): Prom
       error: {
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to retrieve funding transaction',
+      },
+    });
+  }
+});
+
+/**
+ * POST /api/wallet/topup/:id/cancel
+ *
+ * Abandons a deposit the user started but never funded.
+ *
+ * A pending top-up is restored every time Add Money opens, so without this a
+ * user who changed their mind is stuck looking at a waiting screen for an
+ * amount they no longer want, with no way to start a different one.
+ *
+ * Cancelling only abandons our intent to receive: it cannot stop money already
+ * in flight. A transfer that lands afterwards still arrives on the virtual
+ * account and is still credited by the pay-in webhook -- which is why only a
+ * PENDING row can be cancelled, and why a cancelled one is left matchable.
+ */
+router.post('/topup/:id/cancel', authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const { id } = req.params;
+
+    const fundingTx = await prisma.fundingTransaction.findFirst({
+      where: { id, userId },
+    });
+
+    if (!fundingTx) {
+      res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'Funding transaction not found' },
+      });
+      return;
+    }
+
+    if (fundingTx.status === 'CANCELLED') {
+      // Already where the caller wants it: report success rather than an error,
+      // so a double tap is harmless.
+      res.status(200).json({
+        fundingTransactionId: fundingTx.id,
+        status: fundingTx.status,
+        amount: Number(fundingTx.amount),
+        currency: fundingTx.currency,
+      });
+      return;
+    }
+
+    if (fundingTx.status !== 'PENDING') {
+      res.status(409).json({
+        error: {
+          code: 'NOT_CANCELLABLE',
+          message: `A ${fundingTx.status.toLowerCase()} deposit cannot be cancelled`,
+        },
+      });
+      return;
+    }
+
+    const cancelled = await prisma.fundingTransaction.update({
+      where: { id: fundingTx.id },
+      data: { status: 'CANCELLED' },
+    });
+
+    console.log(
+      `[Wallet] Funding transaction ${cancelled.id} cancelled by user ${userId} ` +
+        `(${Number(cancelled.amount)} ${cancelled.currency} never funded).`
+    );
+
+    res.status(200).json({
+      fundingTransactionId: cancelled.id,
+      status: cancelled.status,
+      amount: Number(cancelled.amount),
+      currency: cancelled.currency,
+    });
+  } catch (err: any) {
+    console.error('Error cancelling funding transaction:', err);
+    res.status(500).json({
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to cancel the deposit',
       },
     });
   }

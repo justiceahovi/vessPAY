@@ -522,7 +522,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                       key: const Key('wallet_add_money_button'),
                       onPressed: () {
                         HapticFeedback.lightImpact();
-                        context.push(AppRoutes.addMoney);
+                        context.push(AppRoutes.depositMethod);
                       },
                       icon: const Icon(Icons.add_circle_outline, size: 18),
                       label: const Text(

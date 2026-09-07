@@ -165,11 +165,73 @@ class _CryptoDepositScreenState extends ConsumerState<CryptoDepositScreen> {
       ),
       error: (err, _) => _buildError(err.toString()),
       data: (address) {
-        if (!address.isReady) {
-          return _buildProvisioning(chain);
+        switch (address.state) {
+          case CryptoAddressState.ready:
+            return _buildAddressCard(chain, address);
+          case CryptoAddressState.verificationRequired:
+            return _buildVerificationRequired();
+          case CryptoAddressState.unavailable:
+            return _buildError(
+              address.reason ?? 'Deposit addresses are unavailable right now.',
+            );
+          case CryptoAddressState.provisioning:
+            return _buildProvisioning(chain);
         }
-        return _buildAddressCard(chain, address);
       },
+    );
+  }
+
+  /// A user who has not finished verification gets the next step, not an error.
+  Widget _buildVerificationRequired() {
+    return Container(
+      key: const Key('crypto_verification_required'),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.hairline),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.verified_user_outlined, size: 28, color: AppColors.muted),
+          const SizedBox(height: 12),
+          Text(
+            'Verify your identity first',
+            style: GoogleFonts.inter(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppColors.ink,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'We can issue your deposit address once verification is complete.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              fontSize: 12.5,
+              height: 1.4,
+              color: AppColors.muted,
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 44,
+            child: ElevatedButton(
+              key: const Key('crypto_verify_identity_button'),
+              onPressed: () => context.push(AppRoutes.kycVerification),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: AppColors.onPrimary,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text('Verify identity'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

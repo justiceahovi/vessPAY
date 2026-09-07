@@ -51,6 +51,54 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
   /// The currency the user chose to hold; deposits are denominated in it.
   WalletCurrencyModel get _currency => ref.read(activeWalletCurrencyProvider);
 
+  bool _isCancelling = false;
+
+  /// Abandons the pending deposit, with a confirmation first: money already
+  /// sent still arrives, and the user needs to know that before deciding.
+  Future<void> _handleCancelDeposit() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const Key('cancel_deposit_dialog'),
+        title: const Text('Cancel this deposit?'),
+        content: const Text(
+          'You can then start a new deposit for a different amount. '
+          'If you have already sent the transfer, it will still arrive and be credited.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Keep waiting'),
+          ),
+          TextButton(
+            key: const Key('cancel_deposit_confirm_button'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text(
+              'Cancel deposit',
+              style: TextStyle(color: AppColors.error),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isCancelling = true);
+    final ok = await ref.read(topupControllerProvider.notifier).cancelPendingTopup();
+    if (!mounted) return;
+    setState(() => _isCancelling = false);
+
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not cancel this deposit. Please try again.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
   Future<void> _handleInitiateTopup() async {
     final amount = _currentAmount;
     if (amount <= 0) {
@@ -412,19 +460,6 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
                   ),
           ),
         ),
-        const SizedBox(height: 14),
-        // Crypto takes a different shape to a bank transfer: no amount is
-        // declared up front, the address simply stands there. So it is a
-        // separate route rather than another funding option on this form.
-        Center(
-          child: TextButton.icon(
-            key: const Key('add_money_deposit_crypto_button'),
-            onPressed: () => context.push(AppRoutes.cryptoDeposit),
-            icon: const Icon(Icons.currency_bitcoin_rounded, size: 18),
-            label: const Text('Deposit with crypto instead'),
-            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
-          ),
-        ),
       ],
     );
   }
@@ -624,6 +659,22 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
                 fontFamily: 'StyreneB',
                 color: AppColors.muted,
                 fontSize: 13,
+              ),
+            ),
+          ),
+          // Leaving only restores this same waiting screen next time, for the
+          // same amount. Cancelling is what lets the user deposit a different
+          // one -- or change their mind entirely.
+          TextButton(
+            key: const Key('add_money_cancel_deposit_button'),
+            onPressed: _isCancelling ? null : _handleCancelDeposit,
+            child: Text(
+              _isCancelling ? 'Cancelling...' : 'Cancel this deposit',
+              style: const TextStyle(
+                fontFamily: 'StyreneB',
+                color: AppColors.error,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),

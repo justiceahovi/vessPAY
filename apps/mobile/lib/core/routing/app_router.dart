@@ -5,7 +5,9 @@ import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/signup_screen.dart';
 import '../../features/kyc/screens/kyc_screen.dart';
 import '../../features/wallet/screens/add_money_screen.dart';
+import '../../features/kyc/widgets/kyc_gate.dart';
 import '../../features/wallet/screens/crypto_deposit_screen.dart';
+import '../../features/wallet/screens/deposit_method_screen.dart';
 import '../../features/wallet/screens/wallet_currency_selection_screen.dart';
 import '../../features/pay/models/transaction_model.dart';
 import '../../features/pay/screens/pay_anyone_flow_screen.dart';
@@ -96,6 +98,11 @@ GoRouter createAppRouter({
             builder: (context, state) => const KycScreen(),
           ),
           GoRoute(
+            path: AppRoutes.depositMethod,
+            name: 'deposit-method',
+            builder: (context, state) => const DepositMethodScreen(),
+          ),
+          GoRoute(
             path: AppRoutes.addMoney,
             name: 'add-money',
             builder: (context, state) => const AddMoneyScreen(),
@@ -103,7 +110,12 @@ GoRouter createAppRouter({
           GoRoute(
             path: AppRoutes.cryptoDeposit,
             name: 'crypto-deposit',
-            builder: (context, state) => const CryptoDepositScreen(),
+            // Gated like Add Money: reaching this by deep link should not
+            // put an unverified user in front of a deposit address.
+            builder: (context, state) => const KycGate(
+              action: KycGatedAction.addMoney,
+              child: CryptoDepositScreen(),
+            ),
           ),
           GoRoute(
             path: AppRoutes.payAnyone,

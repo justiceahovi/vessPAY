@@ -378,7 +378,11 @@ router.post('/wewire', async (req: Request, res: Response): Promise<void> => {
             fundingTx = await tx.fundingTransaction.findFirst({
               where: {
                 userId: matchedUser.id,
-                status: 'PENDING',
+                // EXPIRED is included deliberately. Expiry stops us *offering*
+                // a stale deposit in the app; it must never stop us receiving
+                // one. Someone who set up a transfer on Monday and sent it on
+                // Wednesday still has to be credited.
+                status: { in: ['PENDING', 'EXPIRED'] },
                 // Never let a crypto arrival settle a fiat intent.
                 source: 'FIAT',
               },

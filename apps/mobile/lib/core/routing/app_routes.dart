@@ -10,6 +10,7 @@ class AppRoutes {
   static const String travelModeSetup = '/travel-mode-setup';
   static const String home = '/home';
   static const String kycVerification = '/kyc-verification';
+  static const String depositMethod = '/wallet/deposit';
   static const String addMoney = '/wallet/add-money';
   static const String cryptoDeposit = '/wallet/deposit-crypto';
   static const String payAnyone = '/pay';

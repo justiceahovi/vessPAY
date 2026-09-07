@@ -201,7 +201,7 @@ class TransactionDetailScreen extends ConsumerWidget {
                   height: 50,
                   child: OutlinedButton.icon(
                     key: const Key('resume_deposit_button'),
-                    onPressed: () => context.push(AppRoutes.addMoney),
+                    onPressed: () => context.push(AppRoutes.depositMethod),
                     icon: const Icon(Icons.account_balance_outlined, size: 18),
                     label: const Text(
                       'Resume This Deposit',
