@@ -136,8 +136,8 @@ void main() {
       await tester.tap(ghanaCard);
       await tester.pumpAndSettle();
 
-      // Verify CTA button says "Activate Ghana Travel Mode"
-      expect(find.text('Activate Ghana Travel Mode'), findsOneWidget);
+      // Verify CTA button says "Activate Ghana local payment rails"
+      expect(find.text('Activate Ghana local payment rails'), findsOneWidget);
 
       // Tap the action button to confirm
       final confirmBtn = find.byKey(const Key('travel_to_home_button'));
@@ -219,7 +219,7 @@ void main() {
       await tester.tap(nigeriaCard);
       await tester.pumpAndSettle();
 
-      expect(find.text('Activate Nigeria Travel Mode'), findsOneWidget);
+      expect(find.text('Activate Nigeria local payment rails'), findsOneWidget);
 
       final confirmBtn = find.byKey(const Key('travel_to_home_button'));
       await tester.tap(confirmBtn);

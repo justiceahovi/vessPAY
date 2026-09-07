@@ -265,7 +265,7 @@ class _DestinationSelectionScreenState
                     )
                   : Text(
                       _selectedCountry != null
-                          ? 'Activate ${corridorFor(_selectedCountry).name} Travel Mode'
+                          ? 'Activate ${corridorFor(_selectedCountry).name} local payment rails'
                           : 'Select a Destination',
                       style: GoogleFonts.inter(
                         fontSize: 15,

@@ -320,9 +320,9 @@ void main() {
       await tester.tap(nigeriaCard);
       await tester.pumpAndSettle();
 
-      // 4. Confirm selection ("Activate Nigeria Travel Mode")
+      // 4. Confirm selection ("Activate Nigeria local payment rails")
       final activateBtn = find.byKey(const Key('travel_to_home_button'));
-      expect(find.text('Activate Nigeria Travel Mode'), findsOneWidget);
+      expect(find.text('Activate Nigeria local payment rails'), findsOneWidget);
       await tester.tap(activateBtn);
       await tester.pumpAndSettle();
 
