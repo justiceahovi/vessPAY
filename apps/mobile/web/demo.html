@@ -47,6 +47,12 @@
       display: block;
       background: #fff;
     }
+    /* Roomier phone on large displays. Gated on height too, so the frame
+       never outgrows the window and start clipping. */
+    @media (min-width: 1100px) and (min-height: 900px) {
+      .phone { width: 430px; height: 860px; }
+    }
+
     /* On real phones, drop the frame and let the app fill the screen. */
     @media (max-width: 900px) {
       html, body { display: block; background: #fff; }
