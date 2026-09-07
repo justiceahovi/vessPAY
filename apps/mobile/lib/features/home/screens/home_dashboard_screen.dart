@@ -404,7 +404,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               // Secondary Destination Currency Equivalent & Change Currency Action Row
               Row(
                 children: [
-                  // Exchange reference box (reduced width via Expanded)
+                  // Exchange rate box (reduced width via Expanded)
                   Expanded(
                     child: InkWell(
                       key: const Key('wallet_live_rates_button'),
@@ -452,7 +452,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    'Exchange reference: ${walletCurrency.format(1)} = $currencySymbol${formatAmount(rate)}',
+                                    'Exchange rate: ${walletCurrency.format(1)} = $currencySymbol${formatAmount(rate)}',
                                     style: GoogleFonts.jetBrainsMono(
                                       fontSize: 11,
                                       color: AppColors.onDarkSoft,

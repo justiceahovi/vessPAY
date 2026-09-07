@@ -369,7 +369,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verify exchange reference text is displayed
-      expect(find.textContaining('Exchange reference:'), findsOneWidget);
+      expect(find.textContaining('Exchange rate:'), findsOneWidget);
 
       // Verify Change Primary currency icon button
       final changeBtn = find.byKey(const Key('change_primary_currency_button'));
