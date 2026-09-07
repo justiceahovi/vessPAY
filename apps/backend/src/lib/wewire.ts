@@ -1,6 +1,7 @@
 import {
   getWeWireInstitutions,
   normalizeBankAccountNumber,
+  accountNumberRuleText,
   resolveInstitution,
   type PayoutChannel,
 } from './wewire-institutions';
@@ -8,9 +9,25 @@ export {
   getWeWireInstitutions,
   resolveInstitution,
   normalizeBankAccountNumber,
+  accountNumberRuleText,
+  fallbackInstitutions,
   GHANA_INSTITUTIONS,
+  NIGERIA_INSTITUTIONS,
 } from './wewire-institutions';
 export type { PayoutChannel, WeWireInstitution, ResolvedInstitution } from './wewire-institutions';
+
+import { getCorridor } from './corridors';
+export {
+  CORRIDORS,
+  findCorridor,
+  getCorridor,
+  currencyForCountry,
+  isSupportedCorridor,
+  supportedPayoutCurrencies,
+  processorFeeFor,
+  supportsChannel,
+} from './corridors';
+export type { Corridor } from './corridors';
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -625,6 +642,8 @@ export interface CreateWeWireBeneficiaryParams {
   /** Defaults to MOBILE_MONEY for backwards compatibility. */
   channel?: PayoutChannel;
   country?: string | null;
+  /** Payout currency, which decides the corridor. Defaults to GHS. */
+  currency?: string | null;
   subCustomerId?: string | null;
   email?: string | null;
 }
@@ -639,18 +658,48 @@ export interface CreateWeWireBeneficiaryResult {
   institutionCode: string;
 }
 
+export interface NormalizedPhone {
+  /** National form, e.g. '0241234567'. */
+  msisdn: string;
+  /** E.164 form, e.g. '+233241234567'. */
+  international: string;
+  /** Whether the national form matches the corridor's mobile money pattern. */
+  isValid: boolean;
+}
+
 /**
- * Normalizes input Ghana phone number to 10-digit MSISDN and international format.
+ * Normalizes a local phone number to national MSISDN and international format
+ * for a corridor: strips the country's dial code or pads a 9-digit number back
+ * to its leading zero, then validates against the corridor's own pattern.
+ *
+ * A corridor with no mobile money channel (Nigeria) has no pattern, so isValid
+ * is always false there -- the number is still normalized, because a bank
+ * beneficiary can carry a contact number even when it cannot be paid by phone.
  */
-export function normalizeGhanaPhone(phoneInput: string): { msisdn: string; international: string } {
-  const digits = phoneInput.replace(/\D/g, '');
+export function normalizePhone(phoneInput: string, currency = 'GHS'): NormalizedPhone {
+  const corridor = getCorridor(currency);
+  const trunk = corridor.dialCode.replace('+', '');
+
+  const digits = (phoneInput ?? '').replace(/\D/g, '');
   let msisdn = digits;
-  if (digits.startsWith('233') && digits.length === 12) {
-    msisdn = '0' + digits.slice(3);
+  if (digits.startsWith(trunk) && digits.length === trunk.length + 9) {
+    msisdn = '0' + digits.slice(trunk.length);
   } else if (digits.length === 9) {
     msisdn = '0' + digits;
   }
-  const international = `+233${msisdn.replace(/^0/, '')}`;
+
+  const international = `${corridor.dialCode}${msisdn.replace(/^0/, '')}`;
+  const isValid = corridor.msisdnPattern ? corridor.msisdnPattern.test(msisdn) : false;
+
+  return { msisdn, international, isValid };
+}
+
+/**
+ * Normalizes input Ghana phone number to 10-digit MSISDN and international format.
+ * Kept as the Ghana-specific spelling of [normalizePhone] for existing callers.
+ */
+export function normalizeGhanaPhone(phoneInput: string): { msisdn: string; international: string } {
+  const { msisdn, international } = normalizePhone(phoneInput, 'GHS');
   return { msisdn, international };
 }
 
@@ -682,24 +731,33 @@ export async function createWeWireBeneficiary(
   const apiKey = process.env.WEWIRE_API_KEY;
   const baseUrl = (process.env.WEWIRE_BASE_URL || 'https://stage-capi.wewireafrica.com').replace(/\/$/, '');
 
-  const institution = await resolveInstitution(params.network);
+  // The corridor comes from the payout currency, falling back to the country
+  // the beneficiary sits in, so a caller that only knows one of the two works.
+  const corridor = getCorridor(params.currency || params.country || 'GHS');
+  const currency = corridor.currency;
+
+  const institution = await resolveInstitution(params.network, currency);
   const isBank = (params.channel ?? institution.channel) === 'BANK';
-  const alpha3Country = toAlpha3Country(params.country || 'GHA');
+  const alpha3Country = toAlpha3Country(params.country || corridor.alpha3);
 
   // Mobile money is addressed by MSISDN, a bank account by its account number.
-  const { msisdn, international } = normalizeGhanaPhone(params.phone || '');
+  const { msisdn, international, isValid } = normalizePhone(params.phone || '', currency);
   let destinationAccount = msisdn;
   if (isBank) {
-    const normalized = normalizeBankAccountNumber(params.accountNumber || '');
+    const normalized = normalizeBankAccountNumber(params.accountNumber || '', currency);
     if (!normalized) {
       throw new Error(
-        'A valid bank account number (8-20 digits) is required for a bank beneficiary'
+        `A valid bank account number (${accountNumberRuleText(currency)}) is required for a bank beneficiary`
       );
     }
     destinationAccount = normalized;
-  } else if (!/^0[235]\d{8}$/.test(msisdn)) {
+  } else if (!corridor.channels.includes('MOBILE_MONEY')) {
     throw new Error(
-      'A valid 10-digit Ghana mobile money number is required for a mobile money beneficiary'
+      `${corridor.name} has no mobile money channel; pay a bank account instead`
+    );
+  } else if (!isValid) {
+    throw new Error(
+      `A valid 10-digit ${corridor.name} mobile money number is required for a mobile money beneficiary`
     );
   }
 
@@ -736,7 +794,7 @@ export async function createWeWireBeneficiary(
     // A bank beneficiary still carries a contact number when we have one.
     telephone: params.phone ? international : undefined,
     country: alpha3Country,
-    currency: 'GHS',
+    currency,
     subCustomerId: params.subCustomerId && !params.subCustomerId.startsWith('sub_stub_')
       ? params.subCustomerId
       : undefined,
@@ -745,7 +803,7 @@ export async function createWeWireBeneficiary(
       type: institution.accountType,
       accountNumber: destinationAccount,
       accountName: cleanName,
-      currency: 'GHS',
+      currency,
       bankName: institution.name,
       sortCode: institution.code,
     },
@@ -927,20 +985,30 @@ export async function sendWeWireDisbursement(
   const apiKey = process.env.WEWIRE_API_KEY;
   const baseUrl = (process.env.WEWIRE_BASE_URL || 'https://stage-capi.wewireafrica.com').replace(/\/$/, '');
 
-  const institution = await resolveInstitution(params.network);
-  const channel: PayoutChannel = params.channel ?? institution.channel;
   const currency = (params.currency || 'GHS').trim().toUpperCase();
+  const corridor = getCorridor(currency);
+
+  const institution = await resolveInstitution(params.network, currency);
+  const channel: PayoutChannel = params.channel ?? institution.channel;
+
+  if (!corridor.channels.includes(channel)) {
+    throw new Error(
+      `${corridor.name} cannot be paid over the ${channel} channel`
+    );
+  }
 
   // Mobile money is addressed by MSISDN, a bank account by its account number.
   let destinationAccount: string;
   if (channel === 'BANK') {
-    const normalized = normalizeBankAccountNumber(params.accountNumber || '');
+    const normalized = normalizeBankAccountNumber(params.accountNumber || '', currency);
     if (!normalized) {
-      throw new Error('A valid bank account number (8-20 digits) is required for a bank payout');
+      throw new Error(
+        `A valid bank account number (${accountNumberRuleText(currency)}) is required for a bank payout`
+      );
     }
     destinationAccount = normalized;
   } else {
-    destinationAccount = normalizeGhanaPhone(params.phone || '').msisdn;
+    destinationAccount = normalizePhone(params.phone || '', currency).msisdn;
   }
 
   if (!apiKey) {

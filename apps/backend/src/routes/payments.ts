@@ -2,10 +2,13 @@ import { Router, Request, Response } from 'express';
 import {
   getExchangeRate,
   createWeWireBeneficiary,
-  normalizeGhanaPhone,
+  normalizePhone,
   normalizeBankAccountNumber,
+  accountNumberRuleText,
   resolveInstitution,
   sendWeWireDisbursement,
+  getCorridor,
+  processorFeeFor,
   type PayoutChannel,
 } from '../lib/wewire';
 import { verifyToken } from '../lib/auth';
@@ -30,12 +33,11 @@ export function getPaymentFee(sourceAmountUsd: number): number {
 // every sandbox disbursement so far. Shown to the user upfront (quote + review)
 // and reconciled against WeWire's actual returned fee once the payout is sent,
 // since a live rate change is possible even if the flat charge itself is not.
+//
+// The per-corridor amounts live in lib/corridors.ts, so a new rail does not
+// have to be threaded through here. Ghana's 5 is measured; Nigeria's is still
+// an unmeasured placeholder -- see the note on that corridor.
 export const WEWIRE_PROCESSOR_FEE_GHS = 5.0;
-
-function getWewireProcessorFeeFlat(): number {
-  const envFee = process.env.WEWIRE_PROCESSOR_FEE_GHS;
-  return envFee && !isNaN(parseFloat(envFee)) ? parseFloat(envFee) : WEWIRE_PROCESSOR_FEE_GHS;
-}
 
 /**
  * Estimates WeWire's processor fee in the user's source currency.
@@ -43,8 +45,10 @@ function getWewireProcessorFeeFlat(): number {
  * matching the convention used throughout this file's quote math.
  */
 export function getEstimatedWewireFee(destinationCurrency: string, exchangeRate: number): number {
-  if (destinationCurrency.toUpperCase() !== 'GHS' || !exchangeRate) return 0;
-  return Number((getWewireProcessorFeeFlat() / exchangeRate).toFixed(2));
+  if (!exchangeRate) return 0;
+  const flatFee = processorFeeFor(destinationCurrency);
+  if (!flatFee) return 0;
+  return Number((flatFee / exchangeRate).toFixed(2));
 }
 
 
@@ -92,11 +96,12 @@ router.post('/quote', async (req: Request, res: Response): Promise<void> => {
     let sourceCurrency = (
       body.sourceCurrency || req.user?.primaryCurrency || DEFAULT_WALLET_CURRENCY
     ).toString().trim().toUpperCase();
+    // An explicit destinationCurrency wins; otherwise the corridor the country
+    // belongs to decides it. Falls back to Ghana for an unrecognised country,
+    // which is what this endpoint did before corridors existed.
     let destinationCurrency = body.destinationCurrency
       ? body.destinationCurrency.toString().trim().toUpperCase()
-      : country && (country.toString().toUpperCase() === 'GH' || country.toString().toUpperCase() === 'GHANA')
-      ? 'GHS'
-      : 'GHS';
+      : getCorridor(country?.toString()).currency;
 
     // Validate amount
     let destinationAmount: number | null = null;
@@ -258,12 +263,21 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
     }
     const destinationAmount = Number(parsedAmount.toFixed(2));
 
-    // Resolve currencies & country
-    const destinationCurrency = (body.destinationCurrency || 'GHS').toString().trim().toUpperCase();
+    // Resolve currencies & country. The corridor reconciles the two: a country
+    // with no explicit currency takes its corridor's, and a currency with no
+    // country takes its corridor's country.
     const sourceCurrency = (
       body.sourceCurrency || req.user?.primaryCurrency || DEFAULT_WALLET_CURRENCY
     ).toString().trim().toUpperCase();
-    const country = (body.country || 'GH').toString().trim().toUpperCase();
+
+    const corridor = getCorridor(
+      body.destinationCurrency?.toString() || body.country?.toString() || 'GH'
+    );
+    const destinationCurrency = (body.destinationCurrency || corridor.currency)
+      .toString()
+      .trim()
+      .toUpperCase();
+    const country = (body.country || corridor.country).toString().trim().toUpperCase();
 
     // 3. Resolve recipient / beneficiary
     let beneficiaryId = body.beneficiaryId?.toString().trim();
@@ -271,10 +285,25 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
     let network = (body.network || body.bankCode || '').toString().trim();
     let phone = body.phone?.toString().trim();
     let accountNumber = (body.accountNumber || '').toString().trim();
+    // A corridor with a single channel decides it outright: Nigeria has no
+    // mobile money rail, so defaulting to MOBILE_MONEY there would send every
+    // payment into a validator it can never satisfy.
     let channel: PayoutChannel =
       (body.channel || '').toString().trim().toUpperCase() === 'BANK'
         ? 'BANK'
-        : 'MOBILE_MONEY';
+        : corridor.channels.includes('MOBILE_MONEY')
+        ? 'MOBILE_MONEY'
+        : 'BANK';
+
+    if (!corridor.channels.includes(channel)) {
+      res.status(400).json({
+        error: {
+          code: 'UNSUPPORTED_CHANNEL',
+          message: `${corridor.name} cannot be paid over the ${channel} channel. Supported: ${corridor.channels.join(', ')}`,
+        },
+      });
+      return;
+    }
     let institutionCode = '';
 
     let beneficiary: any = null;
@@ -357,12 +386,12 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
           return;
         }
 
-        const normalizedAccount = normalizeBankAccountNumber(accountNumber);
+        const normalizedAccount = normalizeBankAccountNumber(accountNumber, destinationCurrency);
         if (!normalizedAccount) {
           res.status(400).json({
             error: {
               code: 'INVALID_INPUT',
-              message: 'Please provide a valid bank account number (8-20 digits)',
+              message: `Please provide a valid ${corridor.name} bank account number (${accountNumberRuleText(destinationCurrency)})`,
             },
           });
           return;
@@ -393,12 +422,12 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
           return;
         }
 
-        const { msisdn } = normalizeGhanaPhone(phone);
-        if (!/^0[235]\d{8}$/.test(msisdn)) {
+        const { msisdn, isValid } = normalizePhone(phone, destinationCurrency);
+        if (!isValid) {
           res.status(400).json({
             error: {
               code: 'INVALID_INPUT',
-              message: 'Please provide a valid 10-digit Ghana mobile money phone number (e.g. 024XXXXXXX)',
+              message: `Please provide a valid 10-digit ${corridor.name} mobile money phone number (e.g. 024XXXXXXX)`,
             },
           });
           return;
@@ -460,6 +489,7 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
           phone: channel === 'MOBILE_MONEY' ? destinationAccount : undefined,
           accountNumber: channel === 'BANK' ? destinationAccount : undefined,
           country,
+          currency: destinationCurrency,
           subCustomerId: req.user?.wewireSubcustomerId || null,
           email: req.user?.email || null,
         });
@@ -552,7 +582,10 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
         idempotencyKey: `VP-DISB-${transaction.id}`,
         amount: destinationAmount,
         currency: destinationCurrency,
-        network: institutionCode || beneficiary?.institutionCode || network || 'MTN',
+        // No corridor-specific default here: 'MTN' used to stand in, which
+        // would silently misroute a Nigerian payout. An empty code makes
+        // resolveInstitution throw, which is caught just below.
+        network: institutionCode || beneficiary?.institutionCode || network,
         channel,
         phone: channel === 'MOBILE_MONEY' ? phone || beneficiary?.phone || '' : undefined,
         accountNumber:

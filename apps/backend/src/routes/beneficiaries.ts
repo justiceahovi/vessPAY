@@ -4,10 +4,12 @@ import { prisma } from '../lib/db';
 import {
   createWeWireBeneficiary,
   deleteWeWireBeneficiary,
-  normalizeGhanaPhone,
+  normalizePhone,
   normalizeBankAccountNumber,
+  accountNumberRuleText,
   lookupAccountName,
   resolveInstitution,
+  getCorridor,
 } from '../lib/wewire';
 
 const router = Router();
@@ -90,9 +92,15 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
 
+    // The corridor comes from an explicit currency, else the beneficiary's
+    // country, else Ghana -- which is what this endpoint assumed outright
+    // before a second corridor existed.
+    const corridor = getCorridor(req.body?.currency?.toString() || country?.toString() || 'GH');
+    const payoutCurrency = corridor.currency;
+
     let institution;
     try {
-      institution = await resolveInstitution(network);
+      institution = await resolveInstitution(network, payoutCurrency);
     } catch (err: any) {
       return res.status(400).json({
         error: {
@@ -129,12 +137,12 @@ router.post('/', async (req: Request, res: Response) => {
         });
       }
 
-      bankAccount = normalizeBankAccountNumber(accountNumber);
+      bankAccount = normalizeBankAccountNumber(accountNumber, payoutCurrency);
       if (!bankAccount) {
         return res.status(400).json({
           error: {
             code: 'INVALID_INPUT',
-            message: 'Please provide a valid bank account number (8-20 digits)',
+            message: `Please provide a valid ${corridor.name} bank account number (${accountNumberRuleText(payoutCurrency)})`,
           },
         });
       }
@@ -148,12 +156,13 @@ router.post('/', async (req: Request, res: Response) => {
         });
       }
 
-      msisdn = normalizeGhanaPhone(phone).msisdn;
-      if (!/^0[235]\d{8}$/.test(msisdn)) {
+      const normalized = normalizePhone(phone, payoutCurrency);
+      msisdn = normalized.msisdn;
+      if (!normalized.isValid) {
         return res.status(400).json({
           error: {
             code: 'INVALID_INPUT',
-            message: 'Please provide a valid 10-digit Ghana mobile money phone number (e.g. 024XXXXXXX)',
+            message: `Please provide a valid 10-digit ${corridor.name} mobile money phone number (e.g. 024XXXXXXX)`,
           },
         });
       }
@@ -172,7 +181,8 @@ router.post('/', async (req: Request, res: Response) => {
       channel,
       phone: msisdn || undefined,
       accountNumber: bankAccount || undefined,
-      country: country || 'GH',
+      country: country || corridor.country,
+      currency: payoutCurrency,
       subCustomerId: user?.wewireSubcustomerId || null,
       email: user?.email || null,
     });
@@ -187,7 +197,7 @@ router.post('/', async (req: Request, res: Response) => {
         institutionCode: institution.code,
         phone: msisdn,
         accountNumber: bankAccount,
-        country: country || 'GH',
+        country: country || corridor.country,
         wewireBeneficiaryId: weWireResult.wewireBeneficiaryId,
         wewireAccountId: weWireResult.wewireAccountId,
       },
@@ -252,29 +262,33 @@ router.get('/resolve', async (req: Request, res: Response) => {
 
     const isBank = accountInput.length > 0 && institution?.channel === 'BANK';
 
+    const resolveCorridor = getCorridor(currency);
+
     let destinationAccount: string;
     if (isBank) {
-      const normalized = normalizeBankAccountNumber(accountInput);
+      const normalized = normalizeBankAccountNumber(accountInput, currency);
       if (!normalized) {
         return res.status(400).json({
           error: {
             code: 'INVALID_INPUT',
-            message: 'Please provide a valid bank account number (8-20 digits)',
+            message: `Please provide a valid ${resolveCorridor.name} bank account number (${accountNumberRuleText(currency)})`,
           },
         });
       }
       destinationAccount = normalized;
     } else {
-      const { msisdn } = normalizeGhanaPhone(phoneInput);
-      if (!/^0[235]\d{8}$/.test(msisdn)) {
+      const normalized = normalizePhone(phoneInput, currency);
+      if (!normalized.isValid) {
         return res.status(400).json({
           error: {
             code: 'INVALID_INPUT',
-            message: 'Please provide a valid 10-digit Ghana mobile money phone number (e.g. 024XXXXXXX)',
+            message: resolveCorridor.channels.includes('MOBILE_MONEY')
+              ? `Please provide a valid 10-digit ${resolveCorridor.name} mobile money phone number (e.g. 024XXXXXXX)`
+              : `${resolveCorridor.name} has no mobile money channel -- look up a bank account number instead`,
           },
         });
       }
-      destinationAccount = msisdn;
+      destinationAccount = normalized.msisdn;
     }
 
     const network = institution?.name ?? null;

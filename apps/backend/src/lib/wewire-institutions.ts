@@ -6,12 +6,17 @@
  * query parameter (`currency must be one of the following values: GHS, NGN`)
  * and returns entries shaped { code, name, types[], country, channel, currency }
  * where channel is 'BANK' or 'MOMO'.
+ *
+ * Re-verified 2026-09-07: GHS returns 28 institutions across both channels,
+ * NGN returns 422 and every one of them is a BANK with a 6-digit NIP code.
  */
+
+import { getCorridor } from './corridors';
 
 export type PayoutChannel = 'MOBILE_MONEY' | 'BANK';
 
 export interface WeWireInstitution {
-  /** WeWire sort code, e.g. 'GCB', 'ECO', 'MTN'. Sent as accountCode on payout. */
+  /** WeWire sort code, e.g. 'GCB', 'ECO', 'MTN', or an NGN NIP code '000013'. */
   code: string;
   name: string;
   /** Payout channel this institution is reached through. */
@@ -25,13 +30,15 @@ export interface ResolvedInstitution extends WeWireInstitution {
   accountType: 'MOBILE_MONEY' | 'BANK_ACCOUNT';
 }
 
-let cached: { key: string; institutions: WeWireInstitution[]; timestamp: number } | null = null;
+/// Cached per currency: the two corridors are queried alternately as users
+/// switch destination, and a single shared slot would evict on every switch.
+const cached = new Map<string, { institutions: WeWireInstitution[]; timestamp: number }>();
 const CACHE_TTL_MS = 60 * 60 * 1000; // institution lists change rarely
 
 /// A failed fetch is cached briefly too: name lookups call through here on every
 /// keystroke-debounce, and an unavailable endpoint should not be retried each time.
 const FAILURE_CACHE_TTL_MS = 60 * 1000;
-let lastFailure: { key: string; timestamp: number } | null = null;
+const lastFailure = new Map<string, number>();
 
 /**
  * Ghana institutions as returned by the sandbox, used when the API key is not
@@ -68,6 +75,46 @@ export const GHANA_INSTITUTIONS: WeWireInstitution[] = [
   { code: 'ZEN', name: 'ZENITH BANK GHANA LTD', channel: 'BANK', currency: 'GHS', country: 'GH' },
 ];
 
+/**
+ * The Nigerian institutions users actually reach for, out of the 422 the
+ * endpoint serves. Only a fallback for when WeWire is unreachable -- the live
+ * list is always preferred -- so it carries the majors plus the wallets that
+ * Nigerians think of as mobile money but which settle as bank accounts.
+ * Codes are NIP codes, verified against the sandbox on 2026-09-07.
+ */
+export const NIGERIA_INSTITUTIONS: WeWireInstitution[] = [
+  { code: '100004', name: 'OPAY', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '100033', name: 'PALMPAY', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '090405', name: 'MONIEPOINT Microfinance Bank', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '090267', name: 'KUDA Microfinance Bank', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '100002', name: 'PAGA', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '000014', name: 'ACCESS Bank', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '000013', name: 'GTBANK PLC', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '000015', name: 'ZENITH Bank PLC', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '000016', name: 'FIRST Bank OF NIGERIA', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '000004', name: 'UNITED Bank FOR AFRICA', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '000012', name: 'STANBICIBTC Bank', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '000007', name: 'FIDELITY Bank', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '000017', name: 'WEMA Bank', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '000018', name: 'UNION Bank', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '000003', name: 'FCMB', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '000001', name: 'STERLING Bank', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '000010', name: 'ECOBANK Bank', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '000023', name: 'PROVIDUS Bank', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '000011', name: 'UNITY Bank', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '000002', name: 'KEYSTONE Bank', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '000008', name: 'POLARIS Bank', channel: 'BANK', currency: 'NGN', country: 'NG' },
+  { code: '000006', name: 'JAIZ Bank', channel: 'BANK', currency: 'NGN', country: 'NG' },
+];
+
+/** The bundled list for a currency, or [] for a corridor we do not serve. */
+export function fallbackInstitutions(currency: string): WeWireInstitution[] {
+  const key = currency.trim().toUpperCase();
+  if (key === 'GHS') return GHANA_INSTITUTIONS;
+  if (key === 'NGN') return NIGERIA_INSTITUTIONS;
+  return [];
+}
+
 function normalizeChannel(raw: unknown): PayoutChannel {
   const value = String(raw ?? '').trim().toUpperCase();
   // WeWire labels mobile money operators 'MOMO' in the institution list, but the
@@ -80,8 +127,8 @@ function normalizeChannel(raw: unknown): PayoutChannel {
 
 /**
  * Fetches the payout institutions for a currency from GET /v1/banks, cached in
- * memory. Falls back to the verified Ghana list when WeWire is unavailable, so
- * a picker never renders empty.
+ * memory per currency. Falls back to the bundled list for that corridor when
+ * WeWire is unavailable, so a picker never renders empty.
  */
 export async function getWeWireInstitutions(
   currency = 'GHS',
@@ -90,8 +137,9 @@ export async function getWeWireInstitutions(
   const key = currency.trim().toUpperCase();
   const now = Date.now();
 
-  if (!forceRefresh && cached && cached.key === key && now - cached.timestamp < CACHE_TTL_MS) {
-    return cached.institutions;
+  const hit = cached.get(key);
+  if (!forceRefresh && hit && now - hit.timestamp < CACHE_TTL_MS) {
+    return hit.institutions;
   }
 
   const apiKey = process.env.WEWIRE_API_KEY;
@@ -99,16 +147,12 @@ export async function getWeWireInstitutions(
 
   if (!apiKey) {
     console.warn('WEWIRE_API_KEY is not configured; using the fallback institution list');
-    return key === 'GHS' ? GHANA_INSTITUTIONS : [];
+    return fallbackInstitutions(key);
   }
 
-  if (
-    !forceRefresh &&
-    lastFailure &&
-    lastFailure.key === key &&
-    now - lastFailure.timestamp < FAILURE_CACHE_TTL_MS
-  ) {
-    return key === 'GHS' ? GHANA_INSTITUTIONS : [];
+  const failedAt = lastFailure.get(key);
+  if (!forceRefresh && failedAt !== undefined && now - failedAt < FAILURE_CACHE_TTL_MS) {
+    return fallbackInstitutions(key);
   }
 
   try {
@@ -118,8 +162,8 @@ export async function getWeWireInstitutions(
 
     if (!res.ok) {
       console.warn(`WeWire /v1/banks returned ${res.status}; using the fallback institution list`);
-      lastFailure = { key, timestamp: now };
-      return key === 'GHS' ? GHANA_INSTITUTIONS : [];
+      lastFailure.set(key, now);
+      return fallbackInstitutions(key);
     }
 
     const body: any = await res.json();
@@ -136,19 +180,20 @@ export async function getWeWireInstitutions(
       }));
 
     if (institutions.length === 0) {
-      return key === 'GHS' ? GHANA_INSTITUTIONS : [];
+      return fallbackInstitutions(key);
     }
 
-    cached = { key, institutions, timestamp: now };
+    cached.set(key, { institutions, timestamp: now });
+    lastFailure.delete(key);
     return institutions;
   } catch (err: any) {
     console.warn('Failed to fetch WeWire institutions:', err?.message || err);
-    lastFailure = { key, timestamp: now };
-    return key === 'GHS' ? GHANA_INSTITUTIONS : [];
+    lastFailure.set(key, now);
+    return fallbackInstitutions(key);
   }
 }
 
-/** Aliases the app has historically used for the mobile money operators. */
+/** Aliases the app has historically used for the Ghanaian mobile money operators. */
 const MOMO_ALIASES: Record<string, string> = {
   MTN: 'MTN',
   'MTN MOBILE MONEY': 'MTN',
@@ -165,10 +210,21 @@ const MOMO_ALIASES: Record<string, string> = {
   ATM: 'ATM',
 };
 
+function toResolved(found: WeWireInstitution): ResolvedInstitution {
+  return {
+    ...found,
+    accountType: found.channel === 'BANK' ? 'BANK_ACCOUNT' : 'MOBILE_MONEY',
+  };
+}
+
 /**
- * Resolves user-facing input ('MTN', 'GCB', 'GCB Bank', 'Ecobank', 'Stanbic')
- * to a WeWire institution. Matches the sort code first, then the institution
- * name, then a leading-word match so short display names still resolve.
+ * Resolves user-facing input ('MTN', 'GCB', 'GCB Bank', '000013', 'Zenith') to
+ * a WeWire institution for a corridor.
+ *
+ * Exact code and exact name matches win outright. Partial name matches are only
+ * accepted when they are *unambiguous*: across Nigeria's 422 institutions a
+ * substring like 'ACCESS' hits both 'ACCESS Bank' and 'ACCESSMONEY', and
+ * silently picking the first would pay the wrong institution.
  */
 export async function resolveInstitution(
   input: string,
@@ -181,38 +237,62 @@ export async function resolveInstitution(
 
   const upper = raw.toUpperCase();
   const institutions = await getWeWireInstitutions(currency);
-  const pool = institutions.length > 0 ? institutions : GHANA_INSTITUTIONS;
+  const pool = institutions.length > 0 ? institutions : fallbackInstitutions(currency);
 
+  if (pool.length === 0) {
+    throw new Error(`No payout institutions are available for ${currency}`);
+  }
+
+  // 1. Exact matches, in order of how specific they are.
   const aliasCode = MOMO_ALIASES[upper];
-  const candidates = [
+  const exact = [
     (i: WeWireInstitution) => aliasCode !== undefined && i.code.toUpperCase() === aliasCode,
     (i: WeWireInstitution) => i.code.toUpperCase() === upper,
     (i: WeWireInstitution) => i.name.toUpperCase() === upper,
+  ];
+
+  for (const matches of exact) {
+    const found = pool.find(matches);
+    if (found) return toResolved(found);
+  }
+
+  // 2. Partial matches, accepted only when exactly one institution matches.
+  const partial = [
     (i: WeWireInstitution) => i.name.toUpperCase().startsWith(upper),
     (i: WeWireInstitution) => i.name.toUpperCase().includes(upper),
   ];
 
-  for (const matches of candidates) {
-    const found = pool.find(matches);
-    if (found) {
-      return {
-        ...found,
-        accountType: found.channel === 'BANK' ? 'BANK_ACCOUNT' : 'MOBILE_MONEY',
-      };
+  for (const matches of partial) {
+    const found = pool.filter(matches);
+    if (found.length === 1) return toResolved(found[0]);
+    if (found.length > 1) {
+      const names = found.slice(0, 5).map((i) => `${i.name} (${i.code})`).join(', ');
+      throw new Error(
+        `"${raw}" matches ${found.length} institutions for ${currency}: ${names}. ` +
+          'Send the institution code instead -- call GET /api/banks for the list.'
+      );
     }
   }
 
   throw new Error(
-    `Unsupported network or bank: "${raw}". Call GET /api/banks for the list of supported institutions.`
+    `Unsupported network or bank: "${raw}". Call GET /api/banks?currency=${currency} for the list of supported institutions.`
   );
 }
 
 /**
- * Ghana bank account numbers run roughly 8-20 digits depending on the bank, so
- * the check stays deliberately loose: digits only, within that range.
+ * Normalizes a bank account number against the corridor's own rule: Ghana runs
+ * roughly 8-20 digits depending on the bank, Nigeria's NUBAN is exactly 10.
+ * Defaults to the Ghana rule so pre-corridor callers are unchanged.
  */
-export function normalizeBankAccountNumber(input: string): string | null {
+export function normalizeBankAccountNumber(input: string, currency = 'GHS'): string | null {
+  const { min, max } = getCorridor(currency).accountNumber;
   const digits = (input ?? '').replace(/\D/g, '');
-  if (digits.length < 8 || digits.length > 20) return null;
+  if (digits.length < min || digits.length > max) return null;
   return digits;
+}
+
+/** Human-readable form of the corridor's account number rule, for error text. */
+export function accountNumberRuleText(currency = 'GHS'): string {
+  const { min, max } = getCorridor(currency).accountNumber;
+  return min === max ? `${min} digits` : `${min}-${max} digits`;
 }
