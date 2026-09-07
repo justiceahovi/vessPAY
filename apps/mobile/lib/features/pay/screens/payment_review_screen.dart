@@ -52,6 +52,7 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
       destinationAmount: payData.destinationAmount,
       exchangeRate: payData.exchangeRate,
       fee: payData.quoteFee ?? estimate.fee,
+      wewireFee: estimate.wewireFee,
       total: payData.quoteTotal ?? estimate.total,
       country: payData.countryCode,
       network: payData.network,
@@ -201,6 +202,7 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
     final destAmount = quote.destinationAmount;
     final sourceAmount = quote.sourceAmount;
     final fee = quote.fee;
+    final wewireFee = quote.wewireFee;
     final total = quote.total;
     final rate = quote.exchangeRate;
     // The wallet is not necessarily in USD, so every source-side figure is
@@ -477,22 +479,20 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
                       value: sourceCurrency.format(fee),
                       valueKey: const Key('review_fee'),
                     ),
+                    if (wewireFee > 0) ...[
+                      const SizedBox(height: 10),
+                      _buildDetailRow(
+                        label: 'Payment Processor Fee',
+                        value: sourceCurrency.format(wewireFee),
+                        valueKey: const Key('review_wewire_fee'),
+                      ),
+                    ],
                     const Divider(color: AppColors.hairline, height: 22),
                     _buildDetailRow(
                       label: 'Total to Debit (${sourceCurrency.code})',
                       value: sourceCurrency.format(total),
                       valueKey: const Key('review_total'),
                       isBold: true,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'A small network fee may apply on top of this total and will show on your receipt once the payment completes.',
-                      key: Key('review_network_fee_notice'),
-                      style: TextStyle(
-                        fontFamily: 'StyreneB',
-                        fontSize: 12,
-                        color: AppColors.muted,
-                      ),
                     ),
                   ],
                 ),
@@ -600,6 +600,7 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
         destinationCurrency: quote.destinationCurrency,
         destinationAmount: quote.destinationAmount,
         fee: quote.fee,
+        wewireFee: quote.wewireFee,
         exchangeRate: quote.exchangeRate,
         recipientName: recipientName,
         recipientPhone: cleanPhone,

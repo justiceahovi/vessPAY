@@ -9,9 +9,14 @@ class PaymentEstimate {
   static const double feeRate = 0.01;
   static const double minimumFee = 0.01;
 
+  /// WeWire's flat processor fee in GHS, mirrored from the backend's
+  /// WEWIRE_PROCESSOR_FEE_GHS default.
+  static const double wewireProcessorFeeGhs = 5.0;
+
   final double destinationAmount;
   final double sourceAmount;
   final double fee;
+  final double wewireFee;
   final double total;
   final double exchangeRate;
 
@@ -19,6 +24,7 @@ class PaymentEstimate {
     required this.destinationAmount,
     required this.sourceAmount,
     required this.fee,
+    this.wewireFee = 0.0,
     required this.total,
     required this.exchangeRate,
   });
@@ -27,6 +33,7 @@ class PaymentEstimate {
     destinationAmount: 0.0,
     sourceAmount: 0.0,
     fee: 0.0,
+    wewireFee: 0.0,
     total: 0.0,
     exchangeRate: 0.0,
   );
@@ -45,6 +52,7 @@ class PaymentEstimate {
         destinationAmount: 0.0,
         sourceAmount: 0.0,
         fee: 0.0,
+        wewireFee: 0.0,
         total: 0.0,
         exchangeRate: rate,
       );
@@ -56,12 +64,16 @@ class PaymentEstimate {
     final fee = double.parse(
       (rawFee < minimumFee ? minimumFee : rawFee).toStringAsFixed(2),
     );
-    final total = double.parse((sourceAmount + fee).toStringAsFixed(2));
+    final wewireFee =
+        double.parse((wewireProcessorFeeGhs / rate).toStringAsFixed(2));
+    final total =
+        double.parse((sourceAmount + fee + wewireFee).toStringAsFixed(2));
 
     return PaymentEstimate(
       destinationAmount: destinationAmount,
       sourceAmount: sourceAmount,
       fee: fee,
+      wewireFee: wewireFee,
       total: total,
       exchangeRate: rate,
     );

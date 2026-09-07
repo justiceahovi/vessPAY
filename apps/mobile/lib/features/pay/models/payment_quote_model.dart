@@ -5,6 +5,11 @@ class PaymentQuoteModel {
   final double destinationAmount;
   final double exchangeRate;
   final double fee;
+
+  /// WeWire's flat processor fee, estimated upfront and converted into
+  /// [sourceCurrency]. Reconciled against the actual charge once the payout
+  /// is sent (see [TransactionModel.wewireFee]).
+  final double wewireFee;
   final double total;
   final String? country;
   final String? network;
@@ -17,6 +22,7 @@ class PaymentQuoteModel {
     required this.destinationAmount,
     required this.exchangeRate,
     required this.fee,
+    this.wewireFee = 0.0,
     required this.total,
     this.country,
     this.network,
@@ -31,6 +37,7 @@ class PaymentQuoteModel {
       destinationAmount: (json['destinationAmount'] as num).toDouble(),
       exchangeRate: (json['exchangeRate'] as num).toDouble(),
       fee: (json['fee'] as num).toDouble(),
+      wewireFee: (json['wewireFee'] as num?)?.toDouble() ?? 0.0,
       total: (json['total'] as num).toDouble(),
       country: json['country'] as String?,
       network: json['network'] as String?,
@@ -46,6 +53,7 @@ class PaymentQuoteModel {
       'destinationAmount': destinationAmount,
       'exchangeRate': exchangeRate,
       'fee': fee,
+      'wewireFee': wewireFee,
       'total': total,
       if (country != null) 'country': country,
       if (network != null) 'network': network,

@@ -25,6 +25,28 @@ export function getPaymentFee(sourceAmountUsd: number): number {
   return sourceAmountUsd > 0 ? Math.max(0.01, calculated) : 0;
 }
 
+// WeWire charges a flat processor fee per disbursement, denominated in the
+// destination (payout) currency -- observed to be a consistent 5 GHS across
+// every sandbox disbursement so far. Shown to the user upfront (quote + review)
+// and reconciled against WeWire's actual returned fee once the payout is sent,
+// since a live rate change is possible even if the flat charge itself is not.
+export const WEWIRE_PROCESSOR_FEE_GHS = 5.0;
+
+function getWewireProcessorFeeFlat(): number {
+  const envFee = process.env.WEWIRE_PROCESSOR_FEE_GHS;
+  return envFee && !isNaN(parseFloat(envFee)) ? parseFloat(envFee) : WEWIRE_PROCESSOR_FEE_GHS;
+}
+
+/**
+ * Estimates WeWire's processor fee in the user's source currency.
+ * `exchangeRate` is destinationCurrency-per-1-unit-of-sourceCurrency (e.g. 1 USD = 12 GHS),
+ * matching the convention used throughout this file's quote math.
+ */
+export function getEstimatedWewireFee(destinationCurrency: string, exchangeRate: number): number {
+  if (destinationCurrency.toUpperCase() !== 'GHS' || !exchangeRate) return 0;
+  return Number((getWewireProcessorFeeFlat() / exchangeRate).toFixed(2));
+}
+
 
 /**
  * Optional authentication helper: attaches req.user if valid token provided.
@@ -137,7 +159,8 @@ router.post('/quote', async (req: Request, res: Response): Promise<void> => {
     }
 
     const fee = getPaymentFee(sourceAmount!);
-    const total = Number((sourceAmount! + fee).toFixed(2));
+    const wewireFee = getEstimatedWewireFee(destinationCurrency, exchangeRate);
+    const total = Number((sourceAmount! + fee + wewireFee).toFixed(2));
 
     res.status(200).json({
       sourceCurrency,
@@ -146,6 +169,7 @@ router.post('/quote', async (req: Request, res: Response): Promise<void> => {
       destinationAmount,
       exchangeRate,
       fee,
+      wewireFee,
       total,
       ...(country ? { country: country.toString().toUpperCase() } : {}),
       ...(network ? { network } : {}),
@@ -478,7 +502,8 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
     const exchangeRate = rateResult.rate;
     const sourceAmount = Number((destinationAmount / exchangeRate).toFixed(2));
     const fee = getPaymentFee(sourceAmount);
-    const total = Number((sourceAmount + fee).toFixed(2));
+    const estimatedWewireFee = getEstimatedWewireFee(destinationCurrency, exchangeRate);
+    const total = Number((sourceAmount + fee + estimatedWewireFee).toFixed(2));
 
     // 5. Wallet balance verification
     const wallet = await prisma.wallet.findFirst({
@@ -507,6 +532,7 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
         destinationCurrency,
         destinationAmount,
         fee,
+        wewireFee: estimatedWewireFee,
         exchangeRate,
         recipientName: recipientName || beneficiary?.name || 'Recipient',
         recipientPhone: phone || beneficiary?.phone,
@@ -557,15 +583,20 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
     // 8. Store returned wewire_transaction_id and move local transaction to PENDING
     // Per Section 9: Do NOT mark COMPLETED here — that only happens via webhook (T5.4)
     // Wallet ledger debit also happens on transition to COMPLETED via webhook (T5.4)
-    // WeWire's own disbursement fee (only known once they've processed the request)
-    // is recorded here so it gets passed on to the user's debit instead of vessPay
-    // absorbing it -- see webhooks.ts totalDebit calculation.
-    const wewireFee = disbursementResult.fee ? Number(disbursementResult.fee) : 0;
+    // Reconcile the estimated wewireFee (used for the upfront quote/balance check)
+    // against what WeWire actually charged. Their `fee` is denominated in the
+    // destination currency, same as `amount`, so it must be converted into the
+    // source currency (via this transaction's own rate) before it can sit
+    // alongside sourceAmount/fee -- passed on to the user rather than absorbed.
+    const actualWewireFeeDestCurrency = disbursementResult.fee ? Number(disbursementResult.fee) : NaN;
+    const reconciledWewireFee = !isNaN(actualWewireFeeDestCurrency)
+      ? Number((actualWewireFeeDestCurrency / exchangeRate).toFixed(2))
+      : estimatedWewireFee;
     const updatedTx = await prisma.transaction.update({
       where: { id: transaction.id },
       data: {
         wewireTransactionId: disbursementResult.wewireTransactionId,
-        wewireFee: isNaN(wewireFee) ? 0 : wewireFee,
+        wewireFee: reconciledWewireFee,
         status: 'PENDING',
       },
     });
