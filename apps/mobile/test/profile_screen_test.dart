@@ -103,6 +103,11 @@ class TestMockWalletRepository implements WalletRepository {
   }) async => throw UnimplementedError();
 
   @override
+  Future<TopupResponseModel?> getPendingTopup({
+    String currency = 'USD',
+  }) async => null;
+
+  @override
   Future<TopupResponseModel> getTopupStatus(
     String fundingTransactionId,
   ) async => throw UnimplementedError();
@@ -219,8 +224,7 @@ void main() {
 
         // Verify user's name & email
         expect(find.byKey(const Key('profile_user_name')), findsOneWidget);
-        // Shown twice: once in the shared app bar greeting, once on the card.
-        expect(find.text('Kwame Doe'), findsNWidgets(2));
+        expect(find.text('Kwame Doe'), findsOneWidget);
         expect(find.text('kwame.doe@example.com'), findsOneWidget);
 
         // Verify initials "KD"
@@ -377,8 +381,7 @@ void main() {
       // Landed on Profile screen
       expect(find.byKey(const Key('profile_screen')), findsOneWidget);
       expect(find.text('Profile & Account'), findsOneWidget);
-      // Shown twice: once in the shared app bar greeting, once on the card.
-      expect(find.text('Kwame Doe'), findsNWidgets(2));
+      expect(find.text('Kwame Doe'), findsOneWidget);
 
       // Tab screens carry no back button; the bottom nav returns to Home
       await tester.tap(find.byKey(const Key('nav_item_home')));

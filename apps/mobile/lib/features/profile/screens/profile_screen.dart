@@ -263,7 +263,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       // Same header as Home and Transactions; sharing lives in the Share App
       // Link card below.
       appBar: const MainAppBar(
-        subtitle: 'Profile & Account',
+        title: 'Profile & Account',
         avatarOpensProfile: false,
       ),
       body: SafeArea(

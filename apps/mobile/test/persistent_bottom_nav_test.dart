@@ -77,6 +77,10 @@ class NavMockWalletRepository implements WalletRepository {
       throw UnimplementedError();
 
   @override
+  Future<TopupResponseModel?> getPendingTopup({String currency = 'USD'}) async =>
+      null;
+
+  @override
   Future<TopupResponseModel> getTopupStatus(String fundingTransactionId) async =>
       throw UnimplementedError();
 

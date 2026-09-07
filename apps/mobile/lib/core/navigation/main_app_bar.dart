@@ -23,23 +23,24 @@ final homeUserProfileProvider = FutureProvider((ref) async {
 /// screen name | Notifications | Help | Country Flag Selector.
 ///
 /// Home, Profile and Transactions all wear it so the header stays put while
-/// tabs change; [subtitle] is the only per-screen difference. These are tab
-/// destinations, so the bar carries no back button - the bottom nav moves
-/// between them.
+/// tabs change. Home greets the user by name; a screen that names itself passes
+/// a [title], which stands alone in place of the greeting.
+/// These are tab destinations, so the bar carries no back button - the bottom
+/// nav moves between them.
 class MainAppBar extends ConsumerWidget implements PreferredSizeWidget {
-  /// Second line under the user's name, naming the current screen.
-  final String subtitle;
+  /// Screen title on the lead line. Null on Home, where the name leads.
+  final String? title;
 
-  /// Optional key for the subtitle, letting a screen keep its title test key.
-  final Key? subtitleKey;
+  /// Optional key for the lead line, letting a screen keep its title test key.
+  final Key? titleKey;
 
   /// Whether tapping the avatar opens Profile. Off on Profile itself.
   final bool avatarOpensProfile;
 
   const MainAppBar({
     super.key,
-    this.subtitle = 'VessPay Home',
-    this.subtitleKey,
+    this.title,
+    this.titleKey,
     this.avatarOpensProfile = true,
   });
 
@@ -78,13 +79,15 @@ class MainAppBar extends ConsumerWidget implements PreferredSizeWidget {
             _buildAvatar(context),
             const SizedBox(width: 12),
 
-            // User Greeting & screen identifier
+            // Screen title, or the user greeting on Home
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    userName,
+                    title ?? userName,
+                    key: titleKey,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(
@@ -94,18 +97,19 @@ class MainAppBar extends ConsumerWidget implements PreferredSizeWidget {
                       letterSpacing: -0.3,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    key: subtitleKey,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.muted,
+                  if (title == null) ...[
+                    const SizedBox(height: 2),
+                    const Text(
+                      'VessPay Home',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.muted,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

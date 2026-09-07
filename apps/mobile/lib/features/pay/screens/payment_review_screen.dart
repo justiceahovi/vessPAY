@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../wallet/models/wallet_currency_model.dart';
 import '../models/pay_flow_model.dart';
 import '../models/payment_estimate.dart';
 import '../models/payment_quote_model.dart';
@@ -202,6 +203,10 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
     final fee = quote.fee;
     final total = quote.total;
     final rate = quote.exchangeRate;
+    // The wallet is not necessarily in USD, so every source-side figure is
+    // formatted with the currency the quote was actually priced in.
+    final sourceCurrency = resolveWalletCurrency(quote.sourceCurrency);
+    final destCurrencySymbol = quote.destinationCurrency == 'NGN' ? '₦' : 'GH₵';
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
@@ -239,9 +244,9 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'You Pay (USD)',
-                                style: TextStyle(
+                              Text(
+                                'You Pay (${sourceCurrency.code})',
+                                style: const TextStyle(
                                   fontFamily: 'StyreneB',
                                   fontSize: 12,
                                   color: AppColors.onDarkSoft,
@@ -249,7 +254,7 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                '\$${total.toStringAsFixed(2)}',
+                                sourceCurrency.format(total),
                                 key: const Key('review_you_pay_header'),
                                 style: const TextStyle(
                                   fontFamily: 'Copernicus',
@@ -261,7 +266,7 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'Includes \$${fee.toStringAsFixed(2)} fee',
+                                'Includes ${sourceCurrency.format(fee)} fee',
                                 style: TextStyle(
                                   fontFamily: 'StyreneB',
                                   fontSize: 11,
@@ -346,7 +351,7 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            'Exchange Rate: 1 USD = GH₵${rate.toStringAsFixed(2)} GHS',
+                            'Exchange Rate: 1 ${sourceCurrency.code} = $destCurrencySymbol${rate.toStringAsFixed(2)} ${quote.destinationCurrency}',
                             key: const Key('review_exchange_rate_chip'),
                             style: const TextStyle(
                               fontFamily: 'StyreneB',
@@ -457,25 +462,25 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
                     const SizedBox(height: 10),
                     _buildDetailRow(
                       label: 'Exchange Rate',
-                      value: '1 USD = GH₵${rate.toStringAsFixed(2)}',
+                      value: '1 ${sourceCurrency.code} = $destCurrencySymbol${rate.toStringAsFixed(2)}',
                       valueKey: const Key('review_exchange_rate'),
                     ),
                     const SizedBox(height: 10),
                     _buildDetailRow(
-                      label: 'USD Subtotal',
-                      value: '\$${sourceAmount.toStringAsFixed(2)}',
+                      label: '${sourceCurrency.code} Subtotal',
+                      value: sourceCurrency.format(sourceAmount),
                       valueKey: const Key('review_source_amount'),
                     ),
                     const SizedBox(height: 10),
                     _buildDetailRow(
                       label: 'VessPay Fee (1%)',
-                      value: '\$${fee.toStringAsFixed(2)}',
+                      value: sourceCurrency.format(fee),
                       valueKey: const Key('review_fee'),
                     ),
                     const Divider(color: AppColors.hairline, height: 22),
                     _buildDetailRow(
-                      label: 'Total to Debit (USD)',
-                      value: '\$${total.toStringAsFixed(2)}',
+                      label: 'Total to Debit (${sourceCurrency.code})',
+                      value: sourceCurrency.format(total),
                       valueKey: const Key('review_total'),
                       isBold: true,
                     ),
@@ -512,7 +517,7 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
                           ),
                         )
                       : Text(
-                          'Confirm Payment • Pay \$${total.toStringAsFixed(2)}',
+                          'Confirm Payment • Pay ${sourceCurrency.format(total)}',
                           style: const TextStyle(
                             fontFamily: 'StyreneB',
                             fontSize: 15,

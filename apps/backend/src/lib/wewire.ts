@@ -433,6 +433,19 @@ export interface TopupInitiationResult {
 }
 
 /**
+ * The hosted checkout page for a checkout id. Deterministic, so a top-up that
+ * was initiated earlier can be handed back its own URL without storing it.
+ */
+export function buildWeWireCheckoutUrl(params: {
+  checkoutId: string;
+  amount: number;
+  currency: string;
+}): string {
+  const appBaseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3000}`).replace(/\/$/, '');
+  return `${appBaseUrl}/checkout/${params.checkoutId}?amount=${params.amount}&currency=${params.currency}`;
+}
+
+/**
  * Initiates funding workflow per WeWire rails (virtual account & hosted checkout fallback).
  */
 export function initiateWeWireFunding(params: {
@@ -443,8 +456,11 @@ export function initiateWeWireFunding(params: {
   currency: string;
 }): TopupInitiationResult {
   const checkoutId = `chk_ww_${Date.now()}_${params.userId.replace(/-/g, '').slice(0, 8)}`;
-  const appBaseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3000}`).replace(/\/$/, '');
-  const checkoutUrl = `${appBaseUrl}/checkout/${checkoutId}?amount=${params.amount}&currency=${params.currency}`;
+  const checkoutUrl = buildWeWireCheckoutUrl({
+    checkoutId,
+    amount: params.amount,
+    currency: params.currency,
+  });
 
   // Deterministic, clean demo virtual account routing based on user profile
   const acctSuffix = params.userId.replace(/[^0-9]/g, '').padEnd(8, '45678901').slice(0, 8);

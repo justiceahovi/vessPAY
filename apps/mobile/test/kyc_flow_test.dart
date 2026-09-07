@@ -159,8 +159,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // Nothing left to verify, so the CTA states that and is disabled rather
+      // than inviting the user back into a portal they have finished with.
       expect(find.text('Start Enhanced Verification'), findsNothing);
-      expect(find.text('Launch Verification Portal'), findsOneWidget);
+      expect(find.text('Launch Verification Portal'), findsNothing);
+      expect(find.text('Verification Complete'), findsOneWidget);
+      expect(
+        tester
+            .widget<ElevatedButton>(find.byKey(const Key('launch_kyc_button')))
+            .onPressed,
+        isNull,
+      );
       expect(find.text('Identity verified. Payouts and deposits active.'),
           findsOneWidget);
       expect(find.text('Tier 2'), findsOneWidget);

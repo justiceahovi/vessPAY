@@ -144,6 +144,42 @@ class TopupNotifier extends StateNotifier<TopupState> {
     state = const TopupState();
   }
 
+  /// Picks a deposit back up where the user left it.
+  ///
+  /// A top-up lives on the backend as a PENDING funding transaction, but this
+  /// notifier is autoDispose: leaving Add Money throws its state away, and the
+  /// virtual account the user was told to transfer to goes with it. Asking for
+  /// that record rebuilds the waiting step around it, so the details are there
+  /// again instead of the user opening a second deposit.
+  ///
+  /// Only ever acts from the amount-entry step: a top-up already under way in
+  /// this session is the fresher truth and is left alone.
+  Future<void> restorePendingTopup() async {
+    if (state.step != TopupStep.enterAmount) return;
+
+    try {
+      final pending = await _repository.getPendingTopup(
+        currency: _ref.read(activeWalletCurrencyCodeProvider),
+      );
+      // The user can start their own top-up while this is in flight, and
+      // their intent outranks the restored one.
+      if (pending == null || !mounted || state.step != TopupStep.enterAmount) {
+        return;
+      }
+
+      state = state.copyWith(
+        step: TopupStep.waitingConfirmation,
+        amount: pending.amount,
+        response: pending,
+        isPolling: true,
+      );
+      _startPolling(pending.fundingTransactionId);
+    } catch (_) {
+      // Resuming is a convenience. If it fails the user simply lands on the
+      // amount entry step, which is where they would have been anyway.
+    }
+  }
+
   Future<TopupResponseModel?> initiateTopup(double amount) async {
     _stopPolling();
     state = state.copyWith(

@@ -29,6 +29,13 @@ abstract class WalletRepository {
   });
   Future<TopupResponseModel> getTopupStatus(String fundingTransactionId);
 
+  /// The deposit the user still has in flight for [currency], or null when
+  /// there is none. A top-up outlives the screen that started it, so this is
+  /// what lets an interrupted one be picked back up.
+  Future<TopupResponseModel?> getPendingTopup({
+    String currency = kDefaultWalletCurrency,
+  });
+
   /// Asks WeWire to drop a sandbox deposit onto the user's real virtual
   /// account. The wallet is credited by the resulting pay-in webhook, not by
   /// this call, so the caller has to wait for the balance rather than assume it.
@@ -141,6 +148,22 @@ class ApiWalletRepository implements WalletRepository {
       '/api/wallet/topup/$fundingTransactionId',
       fromJson: (data) =>
           TopupResponseModel.fromJson(data as Map<String, dynamic>),
+    );
+  }
+
+  @override
+  Future<TopupResponseModel?> getPendingTopup({
+    String currency = kDefaultWalletCurrency,
+  }) async {
+    return _apiClient.get<TopupResponseModel?>(
+      '/api/wallet/topup/pending',
+      queryParameters: {'currency': currency},
+      fromJson: (data) {
+        final pending = data is Map<String, dynamic> ? data['pending'] : null;
+        return pending is Map<String, dynamic>
+            ? TopupResponseModel.fromJson(pending)
+            : null;
+      },
     );
   }
 

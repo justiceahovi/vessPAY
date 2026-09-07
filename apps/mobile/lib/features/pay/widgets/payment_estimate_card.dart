@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../wallet/models/wallet_currency_model.dart';
 import '../models/payment_estimate.dart';
 
 /// Breakdown of what the payment will cost, plus the wallet balance it will be
@@ -8,15 +9,22 @@ import '../models/payment_estimate.dart';
 /// on the review screen, which is why the heading says so.
 class PaymentEstimateCard extends StatelessWidget {
   final PaymentEstimate estimate;
+
+  /// Symbol of the destination currency the recipient is paid in.
   final String currencySymbol;
 
-  /// Available USD balance, or null while it is still loading / unavailable.
+  /// The currency the wallet is held in, which the payment is debited from.
+  /// Not every user holds dollars, so nothing here may assume USD.
+  final WalletCurrencyModel walletCurrency;
+
+  /// Available wallet balance, or null while it is still loading.
   final double? availableBalance;
 
   const PaymentEstimateCard({
     super.key,
     required this.estimate,
     required this.currencySymbol,
+    required this.walletCurrency,
     this.availableBalance,
   });
 
@@ -70,7 +78,7 @@ class PaymentEstimateCard extends StatelessWidget {
                     ],
                   ),
                   Text(
-                    '1 USD = $currencySymbol${estimate.exchangeRate.toStringAsFixed(2)}',
+                    '1 ${walletCurrency.code} = $currencySymbol${estimate.exchangeRate.toStringAsFixed(2)}',
                     key: const Key('pay_live_rate_text'),
                     style: GoogleFonts.inter(
                       fontSize: 12.5,
@@ -82,14 +90,14 @@ class PaymentEstimateCard extends StatelessWidget {
               ),
               const Divider(color: AppColors.surfaceDarkElevated, height: 20),
               _row(
-                'Estimated USD Debit',
-                '\$${estimate.sourceAmount.toStringAsFixed(2)}',
+                'Estimated ${walletCurrency.code} Debit',
+                walletCurrency.format(estimate.sourceAmount),
                 valueKey: const Key('pay_estimated_usd_text'),
               ),
               const SizedBox(height: 8),
               _row(
                 'Transfer Fee (1%)',
-                '\$${estimate.fee.toStringAsFixed(2)}',
+                walletCurrency.format(estimate.fee),
                 valueKey: const Key('pay_estimated_fee_text'),
               ),
               const Divider(color: AppColors.surfaceDarkElevated, height: 20),
@@ -105,7 +113,7 @@ class PaymentEstimateCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    '\$${estimate.total.toStringAsFixed(2)} USD',
+                    '${walletCurrency.format(estimate.total)} ${walletCurrency.code}',
                     key: const Key('pay_estimated_total_text'),
                     style: GoogleFonts.inter(
                       fontSize: 14.5,
@@ -128,7 +136,7 @@ class PaymentEstimateCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'Available \$${availableBalance!.toStringAsFixed(2)}',
+                      'Available ${walletCurrency.format(availableBalance!)}',
                       key: const Key('pay_available_balance_text'),
                       style: GoogleFonts.inter(
                         fontSize: 12,

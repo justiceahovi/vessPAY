@@ -88,8 +88,8 @@ class TransactionListScreen extends ConsumerWidget {
   // Same header as Home and Profile; the list refreshes by pull-to-refresh.
   PreferredSizeWidget _buildAppBar() {
     return const MainAppBar(
-      subtitle: 'Transactions',
-      subtitleKey: Key('transactions_screen_title'),
+      title: 'Transactions',
+      titleKey: Key('transactions_screen_title'),
     );
   }
 

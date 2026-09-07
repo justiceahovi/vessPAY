@@ -5,6 +5,7 @@ import { getDepositAccountStatus } from '../lib/deposit-account';
 import {
   getHostedKycLink,
   isSourceOfFunds,
+  buildWeWireCheckoutUrl,
   initiateWeWireFunding,
   resolveWeWireDepositAccount,
   simulateWeWireDeposit,
@@ -332,10 +333,98 @@ router.post('/deposit-account', authenticate, async (req: Request, res: Response
 });
 
 /**
+ * Bank coordinates for an issued virtual account, in the shape the app renders
+ * them. Only an ACTIVE account has any: a REQUESTED one has every field null,
+ * which would draw an empty details card.
+ */
+function formatDepositAccountDetails(depositAccount: any) {
+  return {
+    bankName: depositAccount.account.bankName ?? null,
+    accountName: depositAccount.account.accountName ?? null,
+    accountNumber: depositAccount.account.accountNumber ?? null,
+    routingNumber: depositAccount.account.routingNumber ?? null,
+    sortCode: depositAccount.account.sortCode ?? null,
+    iban: depositAccount.account.iban ?? null,
+    bic: depositAccount.account.bic ?? null,
+    paymentRails: depositAccount.account.paymentRails ?? [],
+    currency: depositAccount.currency,
+    status: depositAccount.status,
+  };
+}
+
+/**
+ * The wire shape a top-up is reported in. Initiation and resume share it, so a
+ * deposit picked back up later reads exactly like a freshly started one.
+ */
+function formatTopupResponse(fundingTx: any, depositAccount: any) {
+  const accountReady = Boolean(depositAccount?.isActive);
+
+  return {
+    fundingTransactionId: fundingTx.id,
+    checkoutId: fundingTx.checkoutId,
+    checkoutUrl: fundingTx.checkoutId
+      ? buildWeWireCheckoutUrl({
+          checkoutId: fundingTx.checkoutId,
+          amount: Number(fundingTx.amount),
+          currency: fundingTx.currency,
+        })
+      : null,
+    status: fundingTx.status,
+    amount: Number(fundingTx.amount),
+    currency: fundingTx.currency,
+    accountDetails: accountReady
+      ? formatDepositAccountDetails(depositAccount)
+      : null,
+    accountSource: accountReady ? 'wewire' : 'local',
+    wewireAccountId: depositAccount?.accountId ?? null,
+    accountReady,
+    createdAt: fundingTx.createdAt.toISOString(),
+  };
+}
+
+/**
+ * The deposit a user still has in flight, newest first. Passing `amount`
+ * narrows it to a transfer of the same size, which is what re-initiating the
+ * same top-up is.
+ */
+function findPendingTopup(userId: string, currency: string, amount?: number) {
+  return prisma.fundingTransaction.findFirst({
+    where: {
+      userId,
+      currency,
+      status: 'PENDING',
+      ...(amount === undefined ? {} : { amount }),
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+/**
+ * The user's WeWire virtual account for a currency, or null when there is none
+ * to resolve. A deposit is still reportable without it, so an unreachable
+ * WeWire is warned about rather than thrown.
+ */
+async function tryResolveDepositAccount(user: any, currency: string) {
+  if (!user.wewireSubcustomerId) return null;
+
+  try {
+    return await resolveWeWireDepositAccount(user.wewireSubcustomerId, currency);
+  } catch (err: any) {
+    console.warn(
+      `[Wallet] Could not resolve WeWire deposit account for ${user.id}: ${err?.message}`
+    );
+    return null;
+  }
+}
+
+/**
  * POST /api/wallet/topup
  * Initiates funding workflow per Blueprint Section 7.
  * Body: { amount: number, currency?: string }
  * Returns: { checkoutUrl, checkoutId, fundingTransactionId, status, amount, currency, accountDetails }
+ *
+ * 201 when a new deposit was opened, 200 when an identical one was already
+ * pending and is handed back instead.
  */
 router.post('/topup', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -357,56 +446,11 @@ router.post('/topup', authenticate, async (req: Request, res: Response): Promise
       ? rawCurrency.trim().toUpperCase()
       : (user.primaryCurrency || DEFAULT_WALLET_CURRENCY);
 
-    const fundingInfo = initiateWeWireFunding({
-      subCustomerId: user.wewireSubcustomerId,
-      userName: `${user.firstName} ${user.lastName}`,
-      userId: user.id,
-      amount: numericAmount,
-      currency,
-    });
+    // Resolve the virtual account before writing anything. Money can only
+    // arrive on an ACTIVE account, so a top-up that cannot be funded must not
+    // leave a PENDING deposit behind for a later pay-in to match against.
+    const depositAccount = await tryResolveDepositAccount(user, currency);
 
-    // Prefer the user's real WeWire virtual account for this currency. When
-    // WeWire is unreachable or the sub-customer is not KYC-approved yet we
-    // still hand back the local demo rails rather than blocking the top-up.
-    let depositAccount = null;
-    if (user.wewireSubcustomerId) {
-      try {
-        depositAccount = await resolveWeWireDepositAccount(
-          user.wewireSubcustomerId,
-          currency
-        );
-      } catch (err: any) {
-        console.warn(
-          `[Wallet] Could not resolve WeWire deposit account for ${user.id}: ${err?.message}`
-        );
-      }
-    }
-
-    const fundingTx = await prisma.fundingTransaction.create({
-      data: {
-        userId: user.id,
-        amount: numericAmount,
-        currency,
-        checkoutId: fundingInfo.checkoutId,
-        status: 'PENDING',
-      },
-    });
-
-    if (depositAccount) {
-      const wallet = await prisma.wallet.findFirst({
-        where: { userId: user.id, currency },
-      });
-      if (wallet) {
-        await prisma.wallet.update({
-          where: { id: wallet.id },
-          data: { wewireAccountId: depositAccount.accountId },
-        });
-      }
-    }
-
-    // Bank details only exist once the account is ACTIVE: a REQUESTED account
-    // has every field null, which would render an empty details card. Fall back
-    // to the local demo rails rather than showing blanks.
     if (!depositAccount || !depositAccount.isActive) {
       res.status(409).json({
         error: {
@@ -419,42 +463,90 @@ router.post('/topup', authenticate, async (req: Request, res: Response): Promise
       return;
     }
 
-    const accountDetails =
-      depositAccount && depositAccount.isActive
-        ? {
-            bankName: depositAccount.account.bankName ?? null,
-            accountName: depositAccount.account.accountName ?? null,
-            accountNumber: depositAccount.account.accountNumber ?? null,
-            routingNumber: depositAccount.account.routingNumber ?? null,
-            sortCode: depositAccount.account.sortCode ?? null,
-            iban: depositAccount.account.iban ?? null,
-            bic: depositAccount.account.bic ?? null,
-            paymentRails: depositAccount.account.paymentRails ?? [],
-            currency: depositAccount.currency,
-            status: depositAccount.status,
-          }
-        : fundingInfo.accountDetails;
-
-    res.status(201).json({
-      fundingTransactionId: fundingTx.id,
-      checkoutId: fundingInfo.checkoutId,
-      checkoutUrl: fundingInfo.checkoutUrl,
-      status: fundingTx.status,
-      amount: Number(fundingTx.amount),
-      currency: fundingTx.currency,
-      accountDetails,
-      accountSource:
-        depositAccount && depositAccount.isActive ? 'wewire' : 'local',
-      wewireAccountId: depositAccount?.accountId ?? null,
-      accountReady: depositAccount?.isActive ?? false,
-      createdAt: fundingTx.createdAt.toISOString(),
+    const wallet = await prisma.wallet.findFirst({
+      where: { userId: user.id, currency },
     });
+    if (wallet) {
+      await prisma.wallet.update({
+        where: { id: wallet.id },
+        data: { wewireAccountId: depositAccount.accountId },
+      });
+    }
+
+    // One pending deposit per user, currency and amount. Asking again for a
+    // transfer that is already expected resumes that record rather than
+    // leaving a trail of PENDING rows, only the newest of which a pay-in
+    // without a reference would be credited to.
+    let fundingTx = await findPendingTopup(user.id, currency, numericAmount);
+    const resumed = fundingTx !== null;
+
+    if (!fundingTx) {
+      const fundingInfo = initiateWeWireFunding({
+        subCustomerId: user.wewireSubcustomerId,
+        userName: `${user.firstName} ${user.lastName}`,
+        userId: user.id,
+        amount: numericAmount,
+        currency,
+      });
+
+      fundingTx = await prisma.fundingTransaction.create({
+        data: {
+          userId: user.id,
+          amount: numericAmount,
+          currency,
+          checkoutId: fundingInfo.checkoutId,
+          status: 'PENDING',
+        },
+      });
+    }
+
+    res
+      .status(resumed ? 200 : 201)
+      .json(formatTopupResponse(fundingTx, depositAccount));
   } catch (err: any) {
     console.error('Error initiating wallet topup:', err);
     res.status(500).json({
       error: {
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to initiate wallet topup',
+      },
+    });
+  }
+});
+
+/**
+ * GET /api/wallet/topup/pending
+ * The deposit the user still has in flight, if any, in the same shape
+ * initiation returns. An app that was closed mid-deposit picks the flow back
+ * up from here instead of starting a second one.
+ *
+ * Declared before `/topup/:id` so that "pending" is not read as an id.
+ */
+router.get('/topup/pending', authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = req.user!;
+    const rawCurrency = req.query.currency;
+    const currency = (typeof rawCurrency === 'string' && rawCurrency.trim())
+      ? rawCurrency.trim().toUpperCase()
+      : (user.primaryCurrency || DEFAULT_WALLET_CURRENCY);
+
+    const fundingTx = await findPendingTopup(user.id, currency);
+    if (!fundingTx) {
+      res.status(200).json({ pending: null });
+      return;
+    }
+
+    const depositAccount = await tryResolveDepositAccount(user, currency);
+
+    res.status(200).json({
+      pending: formatTopupResponse(fundingTx, depositAccount),
+    });
+  } catch (err: any) {
+    console.error('Error reading pending topup:', err);
+    res.status(500).json({
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to read pending topup',
       },
     });
   }

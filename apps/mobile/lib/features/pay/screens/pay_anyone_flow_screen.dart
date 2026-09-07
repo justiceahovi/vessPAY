@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../wallet/providers/currency_providers.dart';
 import '../../../core/widgets/vesspay_text_field.dart';
 import '../../kyc/widgets/kyc_gate.dart';
 import '../../travel/models/travel_profile_model.dart';
@@ -470,6 +471,7 @@ class _PayAnyoneFlowScreenState extends ConsumerState<PayAnyoneFlowScreen> {
                           PaymentEstimateCard(
                             estimate: estimate,
                             currencySymbol: currencySymbol,
+                            walletCurrency: ref.watch(activeWalletCurrencyProvider),
                             availableBalance: balance,
                           ),
                           const SizedBox(height: 18),

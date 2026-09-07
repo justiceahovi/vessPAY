@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/routing/app_routes.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../models/transaction_model.dart';
 import '../providers/recent_activity_provider.dart';
@@ -190,6 +191,36 @@ class TransactionDetailScreen extends ConsumerWidget {
               _buildReferencesCard(context, tx, vesspayRef, wewireRef),
 
               const SizedBox(height: 32),
+
+              // A deposit still on the rails can be picked back up: Add Money
+              // restores the waiting step around it, virtual account details
+              // and all, so the user can finish the transfer.
+              if (isDeposit && tx.status.toUpperCase() == 'PENDING') ...[
+                SizedBox(
+                  height: 50,
+                  child: OutlinedButton.icon(
+                    key: const Key('resume_deposit_button'),
+                    onPressed: () => context.push(AppRoutes.addMoney),
+                    icon: const Icon(Icons.account_balance_outlined, size: 18),
+                    label: const Text(
+                      'Resume This Deposit',
+                      style: TextStyle(
+                        fontFamily: 'StyreneB',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
 
               // Done Button
               SizedBox(

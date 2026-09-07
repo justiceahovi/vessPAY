@@ -76,6 +76,17 @@ class MockWalletRepositoryForAddMoney implements WalletRepository {
     );
   }
 
+  /// A deposit the backend still has waiting on the rails, for the resume
+  /// path. Null means the user has nothing in flight.
+  TopupResponseModel? pendingTopup;
+  int pendingTopupCalls = 0;
+
+  @override
+  Future<TopupResponseModel?> getPendingTopup({String currency = 'USD'}) async {
+    pendingTopupCalls++;
+    return pendingTopup;
+  }
+
   @override
   Future<TopupResponseModel> getTopupStatus(String fundingTransactionId) async {
     getStatusCalls++;
@@ -221,6 +232,57 @@ void main() {
 
       // Clean up timer before exiting test
       final container = ProviderScope.containerOf(tester.element(find.byType(AddMoneyScreen)));
+      container.read(topupControllerProvider.notifier).reset();
+      await tester.pump();
+    });
+
+    testWidgets('A deposit left pending is resumed when the screen reopens',
+        (tester) async {
+      final mockRepo = MockWalletRepositoryForAddMoney();
+      // The user started this deposit before leaving the screen. The top-up
+      // controller is autoDispose, so by now only the backend knows about it.
+      mockRepo.pendingTopup = const TopupResponseModel(
+        fundingTransactionId: 'ftx-resumed-1',
+        checkoutId: 'chk-resumed-1',
+        status: 'PENDING',
+        amount: 250.0,
+        currency: 'USD',
+        accountSource: 'wewire',
+        accountDetails: TopupAccountDetails(
+          bankName: 'WeWire Treasury Bank',
+          accountNumber: '123456789',
+        ),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            walletRepositoryProvider.overrideWithValue(mockRepo),
+            kycRepositoryProvider.overrideWithValue(VerifiedKycRepository()),
+          ],
+          child: const MaterialApp(
+            home: AddMoneyScreen(),
+          ),
+        ),
+      );
+
+      // Not pumpAndSettle: once restored, the waiting step spins a progress
+      // indicator that never settles.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Opens straight on the waiting step, showing the deposit that is
+      // already expected rather than an empty amount field.
+      expect(mockRepo.pendingTopupCalls, equals(1));
+      expect(find.byKey(const Key('waiting_confirmation_title')), findsOneWidget);
+      expect(find.textContaining('250.00'), findsWidgets);
+      expect(find.byKey(const Key('reopen_checkout_button')), findsOneWidget);
+      // Nothing was initiated: resuming must not open a second deposit.
+      expect(mockRepo.initiateCalls, equals(0));
+
+      final container =
+          ProviderScope.containerOf(tester.element(find.byType(AddMoneyScreen)));
       container.read(topupControllerProvider.notifier).reset();
       await tester.pump();
     });

@@ -25,6 +25,18 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
   final List<double> _quickAmounts = [25.0, 50.0, 100.0, 250.0, 500.0];
 
   @override
+  void initState() {
+    super.initState();
+    // The top-up controller is autoDispose, so this screen always opens on a
+    // blank state even when a deposit is still waiting on the rails. Ask the
+    // backend for that deposit and rebuild the waiting step around it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(topupControllerProvider.notifier).restorePendingTopup();
+    });
+  }
+
+  @override
   void dispose() {
     _amountController.dispose();
     super.dispose();
