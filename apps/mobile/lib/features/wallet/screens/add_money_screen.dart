@@ -553,7 +553,7 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
                 if (account?.hasLocalNumbers ?? false) ...[
                   const Divider(color: AppColors.hairlineSoft, height: 16),
                   _buildSummaryRow(
-                    'Virtual Account',
+                    'Deposit Account',
                     [
                       account!.bankName,
                       if (account.accountNumber != null)
@@ -600,14 +600,14 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
                       .read(topupControllerProvider.notifier)
                       .simulateWeWireDeposit(resp.fundingTransactionId);
                 },
-                icon: const Icon(Icons.bolt, size: 20),
-                label: Text(
-                  'Simulate Bank Deposit (${_currency.format(state.amount)})',
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                //icon: const Icon(Icons.bolt, size: 20),
+                //label: Text(
+                 // 'Simulate Bank Deposit (${_currency.format(state.amount)})',
+                 // style: GoogleFonts.inter(
+                 //   fontSize: 14,
+                 //   fontWeight: FontWeight.w600,
+                 // ),
+               // ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: AppColors.onPrimary,
@@ -630,7 +630,7 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
               },
               icon: const Icon(Icons.account_balance_outlined, size: 18),
               label: const Text(
-                'View Virtual Account Details',
+                'View Deposit Account Details',
                 style: TextStyle(
                   fontFamily: 'StyreneB',
                   fontWeight: FontWeight.w600,
