@@ -10,26 +10,82 @@
       height: 100%;
       margin: 0;
       background: #0e1116;
+      color: #8b93a3;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    body {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 48px;
-      flex-wrap: wrap;
-      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      gap: 56px;
     }
-    .caption {
-      color: #8b93a3;
-      max-width: 280px;
-      line-height: 1.6;
-      font-size: 15px;
-    }
-    .caption h1 {
+
+    .col { width: 300px; flex: none; }
+    .col p { margin: 0 0 14px; }
+
+    h1 {
       color: #fff;
-      font-size: 24px;
-      margin: 0 0 12px;
+      font-size: 26px;
+      line-height: 1.2;
+      margin: 0 0 14px;
       letter-spacing: -0.02em;
     }
-    .caption p { margin: 0 0 10px; }
+    .lede {
+      color: #dfe4ec;
+      font-size: 19px;
+      line-height: 1.4;
+      margin-bottom: 20px !important;
+    }
+    .label {
+      color: #6b7280;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin: 0 0 16px;
+    }
+
+    /* Numbered "how it works" list. */
+    .steps { margin: 0 0 24px; padding: 0; list-style: none; counter-reset: s; }
+    .steps li {
+      counter-increment: s;
+      position: relative;
+      padding-left: 34px;
+      margin-bottom: 16px;
+    }
+    .steps li::before {
+      content: counter(s);
+      position: absolute;
+      left: 0; top: 1px;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: #1b2029;
+      color: #9aa4b5;
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .steps b { color: #dfe4ec; font-weight: 600; }
+
+    /* "Always show both currencies" — UX principle 2, made literal. */
+    .rate {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px 12px;
+      padding: 16px 18px;
+      border: 1px solid #232935;
+      border-radius: 14px;
+      margin-bottom: 18px;
+    }
+    .rate b { color: #fff; font-weight: 600; }
+    .rate .out { color: #4d8dff; }
+
+    .foot { font-size: 13px; color: #5f6878; }
+
     .phone {
       width: 390px;
       height: 844px;
@@ -47,6 +103,14 @@
       display: block;
       background: #fff;
     }
+
+    /* The right-hand column only appears when there is genuinely room for
+       three columns; below that the left column carries the pitch alone. */
+    .col.right { display: none; }
+    @media (min-width: 1400px) {
+      .col.right { display: block; }
+    }
+
     /* Roomier phone on large displays. Gated on height too, so the frame
        never outgrows the window and start clipping. */
     @media (min-width: 1100px) and (min-height: 900px) {
@@ -56,7 +120,7 @@
     /* On real phones, drop the frame and let the app fill the screen. */
     @media (max-width: 900px) {
       html, body { display: block; background: #fff; }
-      .caption { display: none; }
+      .col { display: none; }
       .phone {
         width: 100%;
         height: 100%;
@@ -70,13 +134,31 @@
   </style>
 </head>
 <body>
-  <div class="caption">
+  <div class="col left">
     <h1>VessPay</h1>
-    <p>Cross-border payouts to Ghana Mobile Money.</p>
-    <p>Sandbox environment — no real funds move.</p>
+    <p class="lede">Pay in Africa without a local SIM.</p>
+    <p>Alex lands in Accra with no Ghanaian SIM, no Mobile Money account and no cash. He needs to pay a taxi driver GH&#8373;150.</p>
+    <p>Today that means hunting for an ATM, an exchange desk, or a friend with a MoMo wallet.</p>
   </div>
+
   <div class="phone">
     <iframe src="index.html" title="VessPay"></iframe>
+  </div>
+
+  <div class="col right">
+    <h2 class="label">How it works</h2>
+    <ol class="steps">
+      <li><b>Fund a wallet in USD.</b> Bank transfer or crypto, settled into the wallet.</li>
+      <li><b>Enter any MoMo number.</b> No local SIM and no MoMo registration required.</li>
+      <li><b>VessPay converts and pays out.</b> Straight to MTN, Telecel or a Ghanaian bank.</li>
+    </ol>
+
+    <div class="rate">
+      <span>You pay</span><b>$10.90</b>
+      <span>Recipient gets</span><b class="out">GH&#8373;150</b>
+    </div>
+
+    <p class="foot">Both sides of every payment are always shown before it moves. Running live against the WeWire sandbox &mdash; no real funds move.</p>
   </div>
 </body>
 </html>
