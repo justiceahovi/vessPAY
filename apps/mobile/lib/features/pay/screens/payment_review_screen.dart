@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/config/corridors.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../travel/providers/travel_providers.dart';
 import '../../wallet/models/wallet_currency_model.dart';
 import '../models/pay_flow_model.dart';
 import '../models/payment_estimate.dart';
@@ -210,7 +211,17 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
     // The wallet is not necessarily in USD, so every source-side figure is
     // formatted with the currency the quote was actually priced in.
     final sourceCurrency = resolveWalletCurrency(quote.sourceCurrency);
-    final destCurrencySymbol = corridorFor(quote.destinationCurrency).symbol;
+    final destinationCorridor = corridorFor(quote.destinationCurrency);
+    final destCurrencySymbol = destinationCorridor.symbol;
+    // The server is the authority on whether a rail is live; the bundled table
+    // is the fallback before GET /api/travel/destinations has been read.
+    final payoutAvailable = ref
+            .watch(destinationsProvider)
+            .valueOrNull
+            ?.where((d) => d.currency == quote.destinationCurrency)
+            .map((d) => d.payoutAvailable)
+            .firstOrNull ??
+        destinationCorridor.payoutAvailable;
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
@@ -502,17 +513,76 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
 
               const SizedBox(height: 32),
 
+              // Everything above this point is real for a corridor whose rail
+              // is not live yet -- the recipient was confirmed with the bank,
+              // the rate and fees are the server's. Only the step that moves
+              // money is held back, and it says so rather than failing at the
+              // provider with an error the user cannot act on.
+              if (!payoutAvailable) ...[
+                Container(
+                  key: const Key('review_payout_unavailable_notice'),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceSoft,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.hairline),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.schedule_rounded,
+                        size: 18,
+                        color: AppColors.muted,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${destinationCorridor.name} payouts are not live yet',
+                              style: const TextStyle(
+                                fontFamily: 'StyreneB',
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.ink,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'This quote is live and the recipient is confirmed, '
+                              'but the payout rail for ${destinationCorridor.currency} is not open yet. '
+                              'Nothing will be charged.',
+                              style: const TextStyle(
+                                fontFamily: 'StyreneB',
+                                fontSize: 12.5,
+                                height: 1.35,
+                                color: AppColors.muted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ],
+
               // Confirm Payment CTA Button
               SizedBox(
                 height: 50,
                 child: ElevatedButton(
                   key: const Key('review_confirm_payment_button'),
-                  onPressed: _isSubmitting
+                  onPressed: (_isSubmitting || !payoutAvailable)
                       ? null
                       : () => _handleConfirmPayment(payData, quote),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: AppColors.onPrimary,
+                    disabledBackgroundColor: AppColors.hairline,
+                    disabledForegroundColor: AppColors.muted,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
@@ -529,7 +599,9 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
                           ),
                         )
                       : Text(
-                          'Confirm Payment • Pay ${sourceCurrency.format(total)}',
+                          payoutAvailable
+                              ? 'Confirm Payment • Pay ${sourceCurrency.format(total)}'
+                              : '${destinationCorridor.name} payouts coming soon',
                           style: const TextStyle(
                             fontFamily: 'StyreneB',
                             fontSize: 15,

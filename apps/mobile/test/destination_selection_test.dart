@@ -198,39 +198,31 @@ void main() {
       expect(find.textContaining('GH₵'), findsAtLeast(1));
     });
 
-    testWidgets(
-        'Nigeria is listed but cannot be activated while its payout rail is dark',
+    testWidgets('Switching destination to Nigeria updates selection and Home',
         (WidgetTester tester) async {
-      // WeWire exposes no NGN payout rail: the reference data all works, but a
-      // transfer cannot be sent. The destination stays visible so the roadmap
-      // is legible, and is not selectable so nobody reaches a dead Send button.
+      // Nigeria is fully selectable even though its payout rail is not open:
+      // the whole flow up to confirmation is real, and the gate lives on the
+      // review screen, at the one step that moves money.
       await tester.pumpWidget(createTestApp());
       await tester.pumpAndSettle();
 
       final nigeriaCard = find.byKey(const Key('destination_card_ng'));
       expect(nigeriaCard, findsOneWidget);
-      expect(
-        find.byKey(const Key('destination_unavailable_ng')),
-        findsOneWidget,
-      );
-      expect(find.text('Payouts coming soon'), findsOneWidget);
-
       await tester.tap(nigeriaCard);
       await tester.pumpAndSettle();
 
-      // Selection stays on Ghana, and the reason is surfaced rather than
-      // failing silently.
-      expect(find.text('Activate Ghana Travel Mode'), findsOneWidget);
-      expect(
-        find.textContaining('Nigeria payouts are not live yet'),
-        findsOneWidget,
-      );
+      expect(find.text('Activate Nigeria Travel Mode'), findsOneWidget);
 
-      // Nothing was persisted for the unavailable corridor.
       final confirmBtn = find.byKey(const Key('travel_to_home_button'));
       await tester.tap(confirmBtn);
       await tester.pumpAndSettle();
-      expect(fakeTravelRepo.lastSetCountry, isNot(equals('NG')));
+
+      expect(fakeTravelRepo.setCurrentProfileCallCount, equals(1));
+      expect(fakeTravelRepo.lastSetCountry, equals('NG'));
+
+      // Home reflects the Nigeria corridor
+      expect(find.text('🇳🇬'), findsAtLeast(1));
+      expect(find.textContaining('₦'), findsAtLeast(1));
     });
   });
 }

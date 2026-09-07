@@ -285,5 +285,103 @@ void main() {
       expect(find.text('Unable to fetch live quote'), findsOneWidget);
       expect(find.byKey(const Key('review_retry_button')), findsOneWidget);
     });
+
+    testWidgets(
+        'A corridor with no payout rail is priced in full but cannot be confirmed',
+        (WidgetTester tester) async {
+      // Nigeria: the recipient is confirmed and the quote is real, so the whole
+      // flow is demonstrable. Only the step that moves money is held back.
+      const nigeriaPayData = PayFlowData(
+        countryCode: 'NG',
+        countryName: 'Nigeria',
+        countryFlag: '🇳🇬',
+        destinationCurrency: 'NGN',
+        paymentType: PaymentType.bankTransfer,
+        network: '100004',
+        accountNumber: '8012345678',
+        recipientName: 'Stone 1206',
+        destinationAmount: 50000.0,
+        exchangeRate: 1146.906607,
+      );
+      const nigeriaQuote = PaymentQuoteModel(
+        sourceCurrency: 'GBP',
+        sourceAmount: 43.60,
+        destinationCurrency: 'NGN',
+        destinationAmount: 50000.0,
+        exchangeRate: 1146.906607,
+        fee: 0.44,
+        wewireFee: 0.87,
+        total: 44.91,
+        country: 'NG',
+        network: '100004',
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            paymentRepositoryProvider.overrideWithValue(
+              MockPaymentRepository(stubbedQuote: nigeriaQuote),
+            ),
+          ],
+          child: const MaterialApp(
+            home: PaymentReviewScreen(
+              dataOverride: nigeriaPayData,
+              quoteOverride: nigeriaQuote,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // The quote itself is fully rendered, in Naira.
+      expect(find.text('₦50000.00'), findsWidgets);
+      expect(find.text('Stone 1206'), findsOneWidget);
+
+      // The gate sits on confirmation, and explains itself.
+      expect(
+        find.byKey(const Key('review_payout_unavailable_notice')),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Nigeria payouts are not live yet'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Nothing will be charged'), findsOneWidget);
+
+      final confirmButton = tester.widget<ElevatedButton>(
+        find.byKey(const Key('review_confirm_payment_button')),
+      );
+      expect(confirmButton.onPressed, isNull);
+      expect(find.text('Nigeria payouts coming soon'), findsOneWidget);
+    });
+
+    testWidgets('A live corridor keeps its confirm button enabled',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            paymentRepositoryProvider.overrideWithValue(
+              MockPaymentRepository(stubbedQuote: sampleQuote),
+            ),
+          ],
+          child: const MaterialApp(
+            home: PaymentReviewScreen(
+              dataOverride: samplePayData,
+              quoteOverride: sampleQuote,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('review_payout_unavailable_notice')),
+        findsNothing,
+      );
+      final confirmButton = tester.widget<ElevatedButton>(
+        find.byKey(const Key('review_confirm_payment_button')),
+      );
+      expect(confirmButton.onPressed, isNotNull);
+    });
   });
 }
