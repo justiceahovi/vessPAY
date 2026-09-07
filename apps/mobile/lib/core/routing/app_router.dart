@@ -5,6 +5,7 @@ import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/signup_screen.dart';
 import '../../features/kyc/screens/kyc_screen.dart';
 import '../../features/wallet/screens/add_money_screen.dart';
+import '../../features/wallet/screens/crypto_deposit_screen.dart';
 import '../../features/wallet/screens/wallet_currency_selection_screen.dart';
 import '../../features/pay/models/transaction_model.dart';
 import '../../features/pay/screens/pay_anyone_flow_screen.dart';
@@ -98,6 +99,11 @@ GoRouter createAppRouter({
             path: AppRoutes.addMoney,
             name: 'add-money',
             builder: (context, state) => const AddMoneyScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.cryptoDeposit,
+            name: 'crypto-deposit',
+            builder: (context, state) => const CryptoDepositScreen(),
           ),
           GoRoute(
             path: AppRoutes.payAnyone,

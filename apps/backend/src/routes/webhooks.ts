@@ -2,8 +2,194 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/db';
 import { verifyWeWireSignature } from '../lib/webhook';
 import { DEFAULT_WALLET_CURRENCY } from '../lib/currencies';
+import { priceCryptoDeposit } from '../lib/crypto-conversion';
 
 const router = Router();
+
+export interface CryptoDepositEvent {
+  /** Token received, e.g. 'USDC'. */
+  asset: string;
+  /** Chain it arrived on, e.g. 'BASE'. Absent on some payload shapes. */
+  chain: string | null;
+  /** On-chain transaction hash: the deposit's only stable identity. */
+  txHash: string;
+  /** Exact token amount, kept as a string so no precision is lost in transit. */
+  amount: string;
+  /** Destination address, used to attribute the deposit to a user. */
+  address: string | null;
+}
+
+/**
+ * Recognises a crypto deposit in a webhook payload, or returns null for a fiat
+ * one.
+ *
+ * A crypto deposit is distinguished by carrying an on-chain hash. WeWire's
+ * exact field naming for these events is NOT yet verified -- the sandbox has no
+ * crypto deposit simulator and we have never received one -- so several
+ * spellings are accepted rather than betting on a single one. Confirm against
+ * a real delivery before trusting this in production.
+ */
+export function parseCryptoDeposit(data: any): CryptoDepositEvent | null {
+  if (!data || typeof data !== 'object') return null;
+
+  const pick = (...keys: string[]): string | null => {
+    for (const key of keys) {
+      const value = data[key];
+      if (value !== undefined && value !== null && String(value).trim() !== '') {
+        return String(value).trim();
+      }
+    }
+    return null;
+  };
+
+  const txHash = pick('txHash', 'transactionHash', 'hash', 'onChainHash', 'chainTxHash');
+  const asset = pick('asset', 'token', 'tokenSymbol');
+
+  // Both are required: a hash without an asset is not something we can credit,
+  // and an asset without a hash cannot be made idempotent.
+  if (!txHash || !asset) return null;
+
+  const amount = pick('amount', 'value', 'tokenAmount');
+  if (!amount) return null;
+
+  return {
+    asset: asset.toUpperCase(),
+    chain: pick('chain', 'network', 'blockchain')?.toUpperCase() ?? null,
+    txHash,
+    amount,
+    address: pick('address', 'toAddress', 'destinationAddress', 'depositAddress'),
+  };
+}
+
+/**
+ * Records a crypto deposit that arrived without a matching intent.
+ *
+ * Attribution runs address first (the user was given that address, so it is
+ * theirs) and falls back to the sub-customer id. A deposit we cannot attribute
+ * is deliberately left unrecorded rather than credited to a guess.
+ *
+ * The row carries the exact token amount, but `amount` -- the fiat figure
+ * credited -- stays 0 here. Pricing and crediting happen in
+ * [creditCryptoDeposit], so a deposit that cannot be priced is still recorded
+ * rather than lost.
+ */
+async function createCryptoFundingTransaction(
+  tx: any,
+  deposit: CryptoDepositEvent,
+  subCustomerId?: string | null
+): Promise<any | null> {
+  let user: any = null;
+
+  if (deposit.address) {
+    const owned = await tx.cryptoDepositAddress.findFirst({
+      where: { address: deposit.address },
+      select: { userId: true },
+    });
+    if (owned) user = { id: owned.userId };
+  }
+
+  if (!user && subCustomerId) {
+    user = await tx.user.findFirst({
+      where: { wewireSubcustomerId: subCustomerId },
+      select: { id: true },
+    });
+  }
+
+  if (!user) {
+    console.warn(
+      `[Webhook] Crypto deposit ${deposit.txHash} could not be attributed to a user; not recorded.`
+    );
+    return null;
+  }
+
+  return tx.fundingTransaction.create({
+    data: {
+      userId: user.id,
+      source: 'CRYPTO',
+      asset: deposit.asset,
+      chain: deposit.chain,
+      txHash: deposit.txHash,
+      assetAmount: deposit.amount,
+      // The fiat value is not known here: converting is a separate decision,
+      // and inventing a figure would credit money that has not been priced.
+      amount: 0,
+      currency: deposit.asset,
+      status: 'PENDING',
+    },
+  });
+}
+
+/**
+ * Prices a recorded crypto deposit and credits the user's wallet.
+ *
+ * The token amount is never credited as-is: 10 USDC is not 10 GBP. It is priced
+ * into whichever currency the user actually holds, and the rate used is stored
+ * on the row so the spread against treasury's eventual conversion is
+ * measurable.
+ *
+ * A deposit that cannot be priced stays PENDING and uncredited. That is the
+ * deliberate choice -- an unpriceable deposit is a question for a human, not a
+ * reason to invent a number.
+ */
+async function creditCryptoDeposit(tx: any, fundingTx: any): Promise<void> {
+  const user = await tx.user.findUnique({
+    where: { id: fundingTx.userId },
+    select: { primaryCurrency: true },
+  });
+
+  const walletCurrency = (user?.primaryCurrency || DEFAULT_WALLET_CURRENCY).toUpperCase();
+
+  const pricing = await priceCryptoDeposit(
+    fundingTx.asset,
+    fundingTx.assetAmount?.toString() ?? '0',
+    walletCurrency
+  );
+
+  if (!pricing) {
+    console.warn(
+      `[Webhook] Crypto deposit ${fundingTx.txHash} (${fundingTx.assetAmount} ${fundingTx.asset}) ` +
+        `could not be priced into ${walletCurrency}; left PENDING and uncredited.`
+    );
+    return;
+  }
+
+  await tx.fundingTransaction.update({
+    where: { id: fundingTx.id },
+    data: {
+      status: 'COMPLETED',
+      currency: pricing.currency,
+      amount: pricing.fiatAmount,
+      settledAmount: pricing.fiatAmount,
+      conversionRate: pricing.rate,
+      conversionVia: pricing.via,
+    },
+  });
+
+  const wallet = await tx.wallet.findFirst({
+    where: { userId: fundingTx.userId, currency: pricing.currency },
+  });
+
+  if (!wallet) {
+    await tx.wallet.create({
+      data: {
+        userId: fundingTx.userId,
+        currency: pricing.currency,
+        balance: pricing.fiatAmount,
+      },
+    });
+  } else {
+    await tx.wallet.update({
+      where: { id: wallet.id },
+      data: { balance: { increment: pricing.fiatAmount } },
+    });
+  }
+
+  console.log(
+    `[Webhook] Crypto deposit ${fundingTx.txHash} COMPLETED. ` +
+      `${pricing.assetAmount} ${pricing.asset} -> ${pricing.fiatAmount} ${pricing.currency} ` +
+      `@ ${pricing.rate} (${pricing.via}) for user ${fundingTx.userId}.`
+  );
+}
 
 /**
  * What actually landed, and what the rails took, in wallet units.
@@ -152,6 +338,13 @@ router.post('/wewire', async (req: Request, res: Response): Promise<void> => {
           (data.status === 'SUCCESSFUL' || data.status === 'COMPLETED') &&
           data.type === 'CREDIT');
 
+      // A crypto deposit is address-first: it arrives unannounced, for an
+      // amount nobody declared in advance. It therefore has no PENDING row to
+      // match, and must never be matched against one -- the loosest fiat
+      // fallback below ("this user's newest PENDING deposit") would otherwise
+      // credit an unrelated GBP top-up because some USDC turned up.
+      const cryptoDeposit = parseCryptoDeposit(data);
+
       if (isFundingConfirmed) {
         // Find matching FundingTransaction
         let fundingTx: any = null;
@@ -168,7 +361,16 @@ router.post('/wewire', async (req: Request, res: Response): Promise<void> => {
           });
         }
 
-        if (!fundingTx && subCustomerId) {
+        // The on-chain hash is the only stable identity a crypto deposit
+        // carries, and redelivery is guaranteed, so it is what makes this
+        // idempotent.
+        if (!fundingTx && cryptoDeposit?.txHash) {
+          fundingTx = await tx.fundingTransaction.findUnique({
+            where: { txHash: cryptoDeposit.txHash },
+          });
+        }
+
+        if (!fundingTx && !cryptoDeposit && subCustomerId) {
           const matchedUser = await tx.user.findFirst({
             where: { wewireSubcustomerId: subCustomerId },
           });
@@ -177,13 +379,28 @@ router.post('/wewire', async (req: Request, res: Response): Promise<void> => {
               where: {
                 userId: matchedUser.id,
                 status: 'PENDING',
+                // Never let a crypto arrival settle a fiat intent.
+                source: 'FIAT',
               },
               orderBy: { createdAt: 'desc' },
             });
           }
         }
 
-        if (fundingTx) {
+        // Nothing to match, so record the deposit that actually happened.
+        if (!fundingTx && cryptoDeposit) {
+          fundingTx = await createCryptoFundingTransaction(tx, cryptoDeposit, subCustomerId);
+        }
+
+        if (fundingTx && fundingTx.source === 'CRYPTO') {
+          if (fundingTx.status !== 'COMPLETED') {
+            await creditCryptoDeposit(tx, fundingTx);
+          } else {
+            console.log(
+              `[Webhook] Crypto deposit ${fundingTx.txHash} already COMPLETED. Skipping wallet credit.`
+            );
+          }
+        } else if (fundingTx) {
           // If already COMPLETED, do not increment again (idempotency defense)
           if (fundingTx.status !== 'COMPLETED') {
             // Credit what actually settled, not what the user asked to send:

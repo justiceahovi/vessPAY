@@ -58,6 +58,13 @@ export interface Corridor {
    * wallets) all work. Fail fast rather than spend a real payout attempt.
    */
   payoutEndpoint: 'AFRICA_DISBURSEMENT' | 'INITIATE_PAYOUT' | 'UNSUPPORTED';
+  /**
+   * Whether GET /v1/banks serves an institution list for this currency. Its
+   * validator accepts only GHS and NGN (verified 2026-09-07), so asking for
+   * any other corridor is a guaranteed 400 -- and account lookup runs on every
+   * keystroke-debounce, so the call is skipped rather than retried into a wall.
+   */
+  hasInstitutionList: boolean;
 }
 
 export const CORRIDORS: Corridor[] = [
@@ -79,6 +86,7 @@ export const CORRIDORS: Corridor[] = [
     feeConfirmed: true,
     // Proven working end to end; do not move Ghana onto the other endpoint.
     payoutEndpoint: 'AFRICA_DISBURSEMENT',
+    hasInstitutionList: true,
   },
   {
     country: 'NG',
@@ -110,6 +118,38 @@ export const CORRIDORS: Corridor[] = [
     // registration, the funded NGN wallet), so flip this to the right value
     // the moment WeWire ships the rail.
     payoutEndpoint: 'UNSUPPORTED',
+    hasInstitutionList: true,
+  },
+  {
+    country: 'KE',
+    alpha3: 'KEN',
+    name: 'Kenya',
+    currency: 'KES',
+    symbol: 'KSh',
+    dialCode: '+254',
+    // NOT from the provider: WeWire publishes no Kenyan institution list, so
+    // this is the market shape (M-Pesa first, banks second) rather than
+    // anything verified. Revisit once GET /v1/banks serves KES.
+    channels: ['MOBILE_MONEY', 'BANK'],
+    // Kenyan account numbers vary widely by bank, so the check stays loose.
+    accountNumber: { min: 6, max: 20 },
+    // Safaricom/Airtel MSISDNs are 07xxxxxxxx and 01xxxxxxxx.
+    msisdnPattern: /^0[17]\d{8}$/,
+    // Unknown: no KES payout has ever been priced, and there is no rail to
+    // price one on. Left at 0 rather than invented, so a quote never shows a
+    // fee that has no basis. Set WEWIRE_PROCESSOR_FEE_KES once it is known.
+    processorFee: 0,
+    feeConfirmed: false,
+    // Verified 2026-09-07 -- Kenya is thinner than Nigeria:
+    //   GET /v1/banks?currency=KES     -> 400 "must be one of: GHS, NGN"
+    //   GET /v1/account-lookup KES     -> 400 "must be one of: NGN, GHS"
+    //   POST /v1/beneficiaries KES     -> 201, but unvalidated (it accepted a
+    //                                     junk sort code without complaint)
+    //   business wallets               -> no KES wallet exists
+    //   rates                          -> USD/KES direct; GBP and EUR cross
+    // So only the pricing half of the corridor is real today.
+    payoutEndpoint: 'UNSUPPORTED',
+    hasInstitutionList: false,
   },
 ];
 

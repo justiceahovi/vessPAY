@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:vesspay/core/providers.dart';
 import 'package:vesspay/core/routing/app_router.dart';
 import 'package:vesspay/core/routing/app_routes.dart';
+import 'package:vesspay/core/config/corridors.dart';
 import 'package:vesspay/features/travel/providers/travel_providers.dart';
 import 'package:vesspay/core/storage/token_storage.dart';
 import 'package:vesspay/core/theme/app_theme.dart';
@@ -41,7 +42,9 @@ class FakeTravelRepository implements TravelRepository {
       id: 'profile-uuid-1',
       userId: 'user-uuid-1',
       destinationCountry: destinationCountry,
-      destinationCurrency: destinationCountry == 'GH' ? 'GHS' : 'NGN',
+      // From the corridor table, so a third corridor is not silently mapped
+      // to the second one's currency.
+      destinationCurrency: corridorFor(destinationCountry).currency,
       isActive: true,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
@@ -91,11 +94,11 @@ void main() {
       expect(find.byType(DestinationSelectionScreen), findsOneWidget);
 
       // Verify headline and subtitle
-      expect(find.text('Where are you travelling?'), findsOneWidget);
-      expect(find.text('TRAVEL MODE SETUP'), findsOneWidget);
+      expect(find.text('Choose your destination!'), findsOneWidget);
+      expect(find.text('LOCAL PAYMENT RAIL SETUP'), findsOneWidget);
       expect(
           find.text(
-              'Select your destination to activate local payment rails and live exchange rates without a local SIM.'),
+              'Select your destination to activate local payment rails and live exchange rates!'),
           findsOneWidget);
 
       // Verify destinations are listed: Ghana and Nigeria
@@ -108,8 +111,13 @@ void main() {
       expect(find.text('🇬🇭'), findsOneWidget);
       expect(find.text('🇳🇬'), findsOneWidget);
 
+      // Kenya is offered too, priced through the USD cross
+      expect(find.text('Kenya'), findsOneWidget);
+      expect(find.text('USD → KES'), findsOneWidget);
+      expect(find.text('🇰🇪'), findsOneWidget);
+
       // Verify Ghana has Instant MoMo Payouts highlight
-      expect(find.text('Instant MoMo Payouts'), findsOneWidget);
+      expect(find.text('Instant MoMo & Bank Payments'), findsOneWidget);
 
       // Verify action button exists
       expect(find.byKey(const Key('travel_to_home_button')), findsOneWidget);

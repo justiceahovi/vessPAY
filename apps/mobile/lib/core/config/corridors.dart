@@ -59,16 +59,28 @@ class Corridor {
         return '🇬🇭';
       case 'NG':
         return '🇳🇬';
+      case 'KE':
+        return '🇰🇪';
       default:
         return '🌍';
     }
   }
 
   /// Default institution code for a channel: the first thing a user is most
-  /// likely to want, and always a code the payout rail recognises.
+  /// likely to want, and always a code the payout rail actually recognises.
+  ///
+  /// Empty where the provider publishes no institution list for the corridor
+  /// (Kenya) -- an invented code would be worse than none, because it would
+  /// look selectable and be rejected on submission.
   String defaultNetworkFor(String channel) {
-    if (channel == 'MOBILE_MONEY') return country == 'GH' ? 'MTN' : '';
-    return country == 'GH' ? 'GCB' : '100004'; // GCB Bank / OPay
+    switch (country) {
+      case 'GH':
+        return channel == 'MOBILE_MONEY' ? 'MTN' : 'GCB';
+      case 'NG':
+        return '100004'; // OPay; NGN has no mobile money channel
+      default:
+        return '';
+    }
   }
 
   /// Human-readable account number rule, for validation messages.
@@ -110,7 +122,32 @@ final Corridor nigeriaCorridor = Corridor(
   payoutAvailable: false,
 );
 
-final List<Corridor> kCorridors = [ghanaCorridor, nigeriaCorridor];
+/// Safaricom and Airtel MSISDNs: 07xxxxxxxx and 01xxxxxxxx.
+final RegExp kKenyaMsisdnPattern = RegExp(r'^0[17]\d{8}$');
+
+final Corridor kenyaCorridor = Corridor(
+  country: 'KE',
+  name: 'Kenya',
+  currency: 'KES',
+  symbol: 'KSh',
+  dialCode: '+254',
+  // Not from the provider: WeWire publishes no Kenyan institution list, so
+  // this is the market shape (M-Pesa first, banks second) rather than
+  // anything verified.
+  channels: const ['MOBILE_MONEY', 'BANK'],
+  accountMinDigits: 6,
+  accountMaxDigits: 20,
+  msisdnPattern: kKenyaMsisdnPattern,
+  // Rates resolve (USD/KES direct, GBP and EUR through the USD cross) but
+  // there is no institution list, no account lookup and no payout rail.
+  payoutAvailable: false,
+);
+
+final List<Corridor> kCorridors = [
+  ghanaCorridor,
+  nigeriaCorridor,
+  kenyaCorridor,
+];
 
 /// Resolves a country code, currency or country name to its corridor,
 /// defaulting to Ghana the way the app did before a second corridor existed.

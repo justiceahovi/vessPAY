@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../kyc/widgets/kyc_gate.dart';
@@ -408,6 +410,19 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        // Crypto takes a different shape to a bank transfer: no amount is
+        // declared up front, the address simply stands there. So it is a
+        // separate route rather than another funding option on this form.
+        Center(
+          child: TextButton.icon(
+            key: const Key('add_money_deposit_crypto_button'),
+            onPressed: () => context.push(AppRoutes.cryptoDeposit),
+            icon: const Icon(Icons.currency_bitcoin_rounded, size: 18),
+            label: const Text('Deposit with crypto instead'),
+            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
           ),
         ),
       ],

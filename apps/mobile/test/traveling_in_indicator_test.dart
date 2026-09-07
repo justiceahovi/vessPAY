@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vesspay/features/wallet/models/deposit_account_model.dart';
+import 'package:vesspay/features/wallet/models/crypto_deposit_model.dart';
 import 'package:vesspay/core/providers.dart';
 import 'package:vesspay/core/routing/app_router.dart';
 import 'package:vesspay/core/routing/app_routes.dart';
@@ -59,6 +60,13 @@ class MockTravelRepository implements TravelRepository {
 /// The Home balance card only renders its local-currency reference line when
 /// balances resolve, so the corridor assertions need a working wallet source.
 class MockWalletRepositoryForIndicator implements WalletRepository {
+  @override
+  Future<List<CryptoChainModel>> getCryptoChains() async => const [];
+
+  @override
+  Future<CryptoAddressModel> getCryptoAddress(String chain) async =>
+      CryptoAddressModel.unavailable(chain, 'not stubbed');
+
   /// Last funding transaction a WeWire sandbox deposit was requested for.
   String? simulatedDepositFor;
 
@@ -301,7 +309,7 @@ void main() {
 
       // Verify arrived on "Where are you travelling?" screen
       expect(find.byType(DestinationSelectionScreen), findsOneWidget);
-      expect(find.text('Where are you travelling?'), findsOneWidget);
+      expect(find.text('Choose your destination!'), findsOneWidget);
 
       // 3. Select Nigeria
       final nigeriaCard = find.byKey(const Key('destination_card_ng'));

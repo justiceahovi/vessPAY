@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getWeWireInstitutions } from '../lib/wewire';
+import { getWeWireInstitutions, findCorridor, supportedPayoutCurrencies } from '../lib/wewire';
 
 const router = Router();
 
@@ -12,14 +12,23 @@ const router = Router();
 router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const currency = (req.query.currency || 'GHS').toString().trim().toUpperCase();
+    const corridor = findCorridor(currency);
 
-    if (!['GHS', 'NGN'].includes(currency)) {
+    if (!corridor) {
       res.status(400).json({
         error: {
           code: 'UNSUPPORTED_CURRENCY',
-          message: `Currency '${currency}' is not supported. WeWire serves institution lists for GHS and NGN.`,
+          message: `Currency '${currency}' is not a supported payout corridor. Supported: ${supportedPayoutCurrencies()}.`,
         },
       });
+      return;
+    }
+
+    // A corridor VessPay serves but WeWire publishes no institution list for
+    // (Kenya today) is distinct from a currency we do not serve at all: the
+    // destination is real, the picker just has nothing to show.
+    if (!corridor.hasInstitutionList) {
+      res.status(200).json([]);
       return;
     }
 

@@ -137,6 +137,13 @@ export async function getWeWireInstitutions(
   const key = currency.trim().toUpperCase();
   const now = Date.now();
 
+  // GET /v1/banks serves GHS and NGN only. Asking for anything else is a
+  // guaranteed 400, and this runs on every keystroke-debounce behind recipient
+  // lookup, so a corridor the endpoint does not cover never reaches the wire.
+  if (!getCorridor(key).hasInstitutionList) {
+    return fallbackInstitutions(key);
+  }
+
   const hit = cached.get(key);
   if (!forceRefresh && hit && now - hit.timestamp < CACHE_TTL_MS) {
     return hit.institutions;

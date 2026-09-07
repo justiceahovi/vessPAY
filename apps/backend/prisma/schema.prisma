@@ -38,6 +38,7 @@ model User {
   fundingTransactions FundingTransaction[]
   beneficiaries       Beneficiary[]
   transactions        Transaction[]
+  cryptoAddresses     CryptoDepositAddress[]
   walletSweeps        WalletSweep[]
 
   @@map("users")
@@ -72,6 +73,38 @@ model Wallet {
   @@map("wallets")
 }
 
+/// A crypto deposit address issued to a user, one per chain.
+///
+/// The address is WeWire's, not ours -- this row exists so an inbound deposit
+/// webhook can be attributed to a user. A crypto deposit arrives unannounced,
+/// with no pre-declared amount to match against, so the address is the only
+/// thing tying it to an account.
+model CryptoDepositAddress {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  subCustomerId  String   @map("sub_customer_id")
+  /// WeWire's own address record id.
+  wewireAddressId String  @map("wewire_address_id")
+  chain          String
+  /// MAINNET | TESTNET, as reported by the provider -- never inferred.
+  network        String
+  /// Null while issuance is still in flight.
+  address        String?
+  /// REQUESTED | ACTIVE | ...
+  status         String   @default("REQUESTED")
+  /// Assets this one address can receive, e.g. ["USDC","GHST"].
+  supportedAssets String[] @map("supported_assets")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// One address per user per chain, matching the provider's own idempotency.
+  @@unique([userId, chain])
+  @@index([address])
+  @@map("crypto_deposit_addresses")
+}
+
 model FundingTransaction {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId     String   @map("user_id") @db.Uuid
@@ -84,6 +117,28 @@ model FundingTransaction {
   currency   String   @default("USD")
   checkoutId String?  @map("checkout_id")
   status     String   @default("PENDING")
+  /// FIAT | CRYPTO. A fiat deposit is intent-first (the user declares an amount
+  /// and this row exists before the money moves); a crypto deposit is
+  /// address-first, so this row is created when the deposit is observed.
+  source     String   @default("FIAT")
+  /// Crypto only: the token received, e.g. 'USDC'.
+  asset      String?
+  /// Crypto only: the chain it arrived on, e.g. 'BASE'.
+  chain      String?
+  /// Crypto only: the on-chain transaction hash. Unique, because webhook
+  /// redelivery is guaranteed and this is the only stable identity a crypto
+  /// deposit carries.
+  txHash     String?  @unique @map("tx_hash")
+  /// Crypto only: the exact token amount received. Kept apart from `amount`
+  /// because token decimals (USDC has 6) do not fit Decimal(14,2), and
+  /// truncating a user's deposit is not an acceptable rounding.
+  assetAmount Decimal? @map("asset_amount") @db.Decimal(38, 18)
+  /// Crypto only: the rate the deposit was credited at, in wallet currency per
+  /// token. Recorded so the gap between what we credited and what treasury
+  /// eventually realises on conversion is measurable rather than invisible.
+  conversionRate Decimal? @map("conversion_rate") @db.Decimal(24, 10)
+  /// How that rate was arrived at: 'direct', 'inverse' or 'via:USD'.
+  conversionVia  String?  @map("conversion_via")
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 

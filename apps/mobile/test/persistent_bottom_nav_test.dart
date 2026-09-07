@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vesspay/features/wallet/models/deposit_account_model.dart';
+import 'package:vesspay/features/wallet/models/crypto_deposit_model.dart';
 import 'package:vesspay/core/navigation/floating_bottom_nav_bar.dart';
 import 'package:vesspay/core/navigation/main_app_shell.dart';
 import 'package:vesspay/core/providers.dart';
@@ -63,6 +64,13 @@ class NavMockAuthRepository implements AuthRepository {
 }
 
 class NavMockWalletRepository implements WalletRepository {
+  @override
+  Future<List<CryptoChainModel>> getCryptoChains() async => const [];
+
+  @override
+  Future<CryptoAddressModel> getCryptoAddress(String chain) async =>
+      CryptoAddressModel.unavailable(chain, 'not stubbed');
+
   /// Last funding transaction a WeWire sandbox deposit was requested for.
   String? simulatedDepositFor;
 

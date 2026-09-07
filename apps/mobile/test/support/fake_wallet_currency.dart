@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:vesspay/features/wallet/models/deposit_account_model.dart';
+import 'package:vesspay/features/wallet/models/crypto_deposit_model.dart';
 import 'package:vesspay/core/providers.dart';
 import 'package:vesspay/core/storage/currency_preference_storage.dart';
 import 'package:vesspay/features/wallet/models/topup_model.dart';
@@ -11,6 +12,13 @@ import 'package:vesspay/features/pay/models/transaction_model.dart';
 /// Offline wallet repository for tests that only care about the currency the
 /// wallet is held in, so no screen reaches for the network.
 class FakeCurrencyWalletRepository implements WalletRepository {
+  @override
+  Future<List<CryptoChainModel>> getCryptoChains() async => const [];
+
+  @override
+  Future<CryptoAddressModel> getCryptoAddress(String chain) async =>
+      CryptoAddressModel.unavailable(chain, 'not stubbed');
+
   /// Last funding transaction a WeWire sandbox deposit was requested for.
   String? simulatedDepositFor;
 

@@ -3,6 +3,11 @@ import { prisma } from '../lib/db';
 import { authenticate } from '../middleware/auth';
 import { getDepositAccountStatus } from '../lib/deposit-account';
 import {
+  getSupportedCryptoChains,
+  resolveCryptoDepositAddress,
+  supportedChainCodes,
+} from '../lib/crypto-assets';
+import {
   getHostedKycLink,
   isSourceOfFunds,
   buildWeWireCheckoutUrl,
@@ -838,5 +843,136 @@ router.get('/deposits/:id', authenticate, async (req: Request, res: Response): P
     });
   }
 });
+
+
+/**
+ * GET /api/wallet/crypto-chains
+ * The networks a user can be given a deposit address on, and which assets each
+ * one accepts. Public reference data, like GET /api/banks.
+ *
+ * `network` (MAINNET | TESTNET) is carried through from WeWire deliberately:
+ * it is decided by the API key, and a client that renders a testnet address as
+ * if it were mainnet would lose real funds.
+ */
+router.get('/crypto-chains', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    res.status(200).json(await getSupportedCryptoChains());
+  } catch (err: any) {
+    console.error('Error listing crypto chains:', err);
+    res.status(500).json({
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to retrieve supported crypto chains',
+      },
+    });
+  }
+});
+
+/**
+ * GET  /api/wallet/crypto-address?chain=BASE
+ * POST /api/wallet/crypto-address   { chain: 'BASE' }
+ *
+ * Returns the user's deposit address for a chain, issuing one if they have
+ * none. WeWire's endpoint is itself idempotent, so both verbs are safe to
+ * repeat; GET is the pollable one, because issuance is asynchronous and an
+ * address arrives a moment after it is requested.
+ */
+async function handleCryptoAddress(req: Request, res: Response): Promise<void> {
+  try {
+    const userId = req.user!.id;
+    const rawChain = (req.method === 'GET' ? req.query.chain : req.body?.chain) ?? '';
+    const chain = rawChain.toString().trim().toUpperCase();
+
+    if (!chain) {
+      res.status(400).json({
+        error: {
+          code: 'MISSING_CHAIN',
+          message: `chain is required. Supported chains: ${await supportedChainCodes()}`,
+        },
+      });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { wewireSubcustomerId: true },
+    });
+
+    if (!user?.wewireSubcustomerId) {
+      res.status(409).json({
+        error: {
+          code: 'SUBCUSTOMER_REQUIRED',
+          message: 'Complete verification before requesting a crypto deposit address',
+        },
+      });
+      return;
+    }
+
+    let issued;
+    try {
+      issued = await resolveCryptoDepositAddress(user.wewireSubcustomerId, chain);
+    } catch (err: any) {
+      res.status(400).json({
+        error: { code: 'INVALID_CHAIN', message: err?.message || 'Invalid chain' },
+      });
+      return;
+    }
+
+    if (!issued) {
+      res.status(503).json({
+        error: {
+          code: 'ADDRESS_UNAVAILABLE',
+          message: 'Crypto deposit addresses are not available right now',
+        },
+      });
+      return;
+    }
+
+    // Mirror the address locally: an inbound deposit carries no reference we
+    // control, so this row is the only thing that attributes it to a user.
+    const stored = await prisma.cryptoDepositAddress.upsert({
+      where: { userId_chain: { userId, chain: issued.chain } },
+      create: {
+        userId,
+        subCustomerId: user.wewireSubcustomerId,
+        wewireAddressId: issued.id,
+        chain: issued.chain,
+        network: issued.network,
+        address: issued.address,
+        status: issued.status,
+        supportedAssets: issued.supportedAssets,
+      },
+      update: {
+        wewireAddressId: issued.id,
+        network: issued.network,
+        address: issued.address,
+        status: issued.status,
+        supportedAssets: issued.supportedAssets,
+      },
+    });
+
+    res.status(issued.isActive ? 200 : 202).json({
+      chain: stored.chain,
+      network: stored.network,
+      address: stored.address,
+      status: stored.status,
+      supportedAssets: stored.supportedAssets,
+      isActive: issued.isActive,
+      // Said plainly rather than left for the client to infer from `status`.
+      state: issued.isActive ? 'READY' : 'PROVISIONING',
+    });
+  } catch (err: any) {
+    console.error('Error resolving crypto deposit address:', err);
+    res.status(500).json({
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: err?.message || 'Failed to resolve crypto deposit address',
+      },
+    });
+  }
+}
+
+router.get('/crypto-address', authenticate, handleCryptoAddress);
+router.post('/crypto-address', authenticate, handleCryptoAddress);
 
 export default router;

@@ -65,21 +65,21 @@ const List<WalletCurrencyModel> kDefaultWalletCurrencies = [
     name: 'US Dollar',
     symbol: '\$',
     flag: '🇺🇸',
-    fundingRail: 'ACH & Fedwire virtual account',
+    fundingRail: 'ACH & Fedwire',
   ),
   WalletCurrencyModel(
     code: 'GBP',
     name: 'British Pound',
     symbol: '£',
     flag: '🇬🇧',
-    fundingRail: 'Faster Payments virtual account',
+    fundingRail: 'Faster Payments account',
   ),
   WalletCurrencyModel(
     code: 'EUR',
     name: 'Euro',
     symbol: '€',
     flag: '🇪🇺',
-    fundingRail: 'SEPA virtual account',
+    fundingRail: 'SEPA',
   ),
 ];
 

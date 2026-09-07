@@ -26,17 +26,10 @@ class DestinationModel {
   /// carry (dial code, account number rules, MSISDN pattern).
   Corridor get corridor => corridorFor(country);
 
-  /// Country flag emoji
-  String get flagEmoji {
-    switch (country.toUpperCase()) {
-      case 'GH':
-        return '🇬🇭';
-      case 'NG':
-        return '🇳🇬';
-      default:
-        return '🌍';
-    }
-  }
+  /// Country flag emoji, read from the corridor table so a new corridor only
+  /// has to be described in one place. Falls back to a globe for a destination
+  /// the app does not carry a corridor for.
+  String get flagEmoji => findCorridor(country)?.flagEmoji ?? '🌍';
 
   /// Payment rail description per hackathon corridor specs
   String get paymentRailDescription {
@@ -47,6 +40,8 @@ class DestinationModel {
         // Nigeria has no mobile money rail: OPay, PalmPay, Moniepoint and Kuda
         // are all reached as banks, by account number.
         return 'Bank transfer & wallets (OPay, PalmPay, Kuda)';
+      case 'KE':
+        return 'M-Pesa & bank transfer';
       default:
         return 'Local Payment Rails';
     }

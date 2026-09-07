@@ -36,12 +36,18 @@ export const SUPPORTED_DESTINATIONS: DestinationInfo[] = CORRIDORS.map((corridor
   payoutAvailable: corridor.payoutEndpoint !== 'UNSUPPORTED',
 }));
 
-const DESTINATION_LOOKUP: Record<string, DestinationInfo> = {
-  GH: SUPPORTED_DESTINATIONS[0],
-  GHANA: SUPPORTED_DESTINATIONS[0],
-  NG: SUPPORTED_DESTINATIONS[1],
-  NIGERIA: SUPPORTED_DESTINATIONS[1],
-};
+/// Built from the corridor list rather than indexed by hand, so adding a
+/// corridor cannot leave a destination unresolvable.
+const DESTINATION_LOOKUP: Record<string, DestinationInfo> = {};
+for (const destination of SUPPORTED_DESTINATIONS) {
+  for (const alias of [
+    destination.country,
+    destination.currency,
+    destination.name.toUpperCase(),
+  ]) {
+    DESTINATION_LOOKUP[alias] = destination;
+  }
+}
 
 export function resolveDestination(input: string): DestinationInfo | null {
   if (!input || typeof input !== 'string') return null;
@@ -129,7 +135,7 @@ router.put('/current', authenticate, async (req: Request, res: Response): Promis
       res.status(400).json({
         error: {
           code: 'INVALID_DESTINATION',
-          message: `Destination '${rawDestination}' is not supported. Supported destinations: GH (Ghana), NG (Nigeria)`,
+          message: `Destination '${rawDestination}' is not supported. Supported destinations: ${SUPPORTED_DESTINATIONS.map((d) => `${d.country} (${d.name})`).join(', ')}`,
         },
       });
       return;

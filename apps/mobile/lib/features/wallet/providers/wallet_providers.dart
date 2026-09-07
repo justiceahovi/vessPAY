@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers.dart';
 import '../../pay/providers/recent_activity_provider.dart';
+import '../models/crypto_deposit_model.dart';
 import '../models/deposit_account_model.dart';
 import '../models/topup_model.dart';
 import '../models/wallet_balance_model.dart';
@@ -307,4 +308,21 @@ class TopupNotifier extends StateNotifier<TopupState> {
 final topupControllerProvider = StateNotifierProvider.autoDispose<TopupNotifier, TopupState>((ref) {
   final repository = ref.watch(walletRepositoryProvider);
   return TopupNotifier(repository, ref);
+});
+
+/// Networks a crypto deposit address can be issued on. Reference data, so it
+/// is fetched once and shared.
+final cryptoChainsProvider =
+    FutureProvider<List<CryptoChainModel>>((ref) async {
+  return ref.watch(walletRepositoryProvider).getCryptoChains();
+});
+
+/// The user's deposit address for a chain.
+///
+/// Issuance is asynchronous, so this resolves to PROVISIONING first and the
+/// screen re-reads it until an address appears. The endpoint is idempotent, so
+/// re-reading never issues a second address.
+final cryptoAddressProvider = FutureProvider.autoDispose
+    .family<CryptoAddressModel, String>((ref, chain) async {
+  return ref.watch(walletRepositoryProvider).getCryptoAddress(chain);
 });

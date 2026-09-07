@@ -11,6 +11,7 @@ class AppRoutes {
   static const String home = '/home';
   static const String kycVerification = '/kyc-verification';
   static const String addMoney = '/wallet/add-money';
+  static const String cryptoDeposit = '/wallet/deposit-crypto';
   static const String payAnyone = '/pay';
   static const String paymentReview = '/pay/review';
   static const String paymentProcessing = '/pay/processing';

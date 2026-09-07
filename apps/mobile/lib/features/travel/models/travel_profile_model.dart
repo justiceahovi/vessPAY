@@ -25,6 +25,8 @@ class TravelProfileModel {
         return 'Ghana';
       case 'NG':
         return 'Nigeria';
+      case 'KE':
+        return 'Kenya';
       default:
         return destinationCountry;
     }
@@ -37,6 +39,8 @@ class TravelProfileModel {
         return '🇬🇭';
       case 'NG':
         return '🇳🇬';
+      case 'KE':
+        return '🇰🇪';
       default:
         return '🌍';
     }

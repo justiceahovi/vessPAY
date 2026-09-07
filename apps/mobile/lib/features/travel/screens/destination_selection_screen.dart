@@ -143,7 +143,7 @@ class _DestinationSelectionScreenState
                 ],
                 // Display Headline per DESIGN.md
                 Text(
-                  'Choose a different destination!',
+                  'Choose your destination!',
                   style: GoogleFonts.inter(
                     fontWeight: FontWeight.w700,
                     fontSize: widget.isBottomSheet ? 22 : 28,

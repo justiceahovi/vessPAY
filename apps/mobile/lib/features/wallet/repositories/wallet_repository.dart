@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/providers.dart';
 import '../../pay/models/transaction_model.dart';
+import '../models/crypto_deposit_model.dart';
 import '../models/deposit_account_model.dart';
 import '../models/topup_model.dart';
 import '../models/wallet_balance_model.dart';
@@ -9,6 +10,13 @@ import '../models/wallet_currency_model.dart';
 
 abstract class WalletRepository {
   Future<List<WalletBalanceModel>> getBalances();
+
+  /// Networks a crypto deposit address can be issued on, and what each accepts.
+  Future<List<CryptoChainModel>> getCryptoChains();
+
+  /// The user's deposit address for a chain, issuing one if they have none.
+  /// Safe to poll: issuance is asynchronous and the endpoint is idempotent.
+  Future<CryptoAddressModel> getCryptoAddress(String chain);
 
   /// Wallet currencies the user is allowed to hold and deposit into.
   Future<List<WalletCurrencyModel>> getSupportedCurrencies();
@@ -102,6 +110,26 @@ class ApiWalletRepository implements WalletRepository {
         }
         return currencyCode.trim().toUpperCase();
       },
+    );
+  }
+
+  @override
+  Future<List<CryptoChainModel>> getCryptoChains() async {
+    return _apiClient.get<List<CryptoChainModel>>(
+      '/api/wallet/crypto-chains',
+      fromJson: (data) => (data as List)
+          .map((e) => CryptoChainModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  @override
+  Future<CryptoAddressModel> getCryptoAddress(String chain) async {
+    return _apiClient.get<CryptoAddressModel>(
+      '/api/wallet/crypto-address',
+      queryParameters: {'chain': chain},
+      fromJson: (data) =>
+          CryptoAddressModel.fromJson(data as Map<String, dynamic>),
     );
   }
 
