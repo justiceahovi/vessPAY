@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:vesspay/core/providers.dart';
 import 'package:vesspay/core/routing/app_router.dart';
 import 'package:vesspay/core/routing/app_routes.dart';
+import 'package:vesspay/features/travel/providers/travel_providers.dart';
 import 'package:vesspay/core/storage/token_storage.dart';
 import 'package:vesspay/core/theme/app_theme.dart';
 import 'package:vesspay/features/placeholders/placeholder_screens.dart';
@@ -20,18 +21,10 @@ class FakeTravelRepository implements TravelRepository {
 
   @override
   Future<List<DestinationModel>> getDestinations() async {
-    return const [
-      DestinationModel(
-        country: 'GH',
-        name: 'Ghana',
-        currency: 'GHS',
-      ),
-      DestinationModel(
-        country: 'NG',
-        name: 'Nigeria',
-        currency: 'NGN',
-      ),
-    ];
+    // Mirrors what GET /api/travel/destinations actually returns, including
+    // each corridor's payout availability -- so a corridor whose rail is dark
+    // is dark here too.
+    return kDefaultDestinations;
   }
 
   @override
@@ -205,32 +198,39 @@ void main() {
       expect(find.textContaining('GH₵'), findsAtLeast(1));
     });
 
-    testWidgets('Switching destination to Nigeria updates selection and Home',
+    testWidgets(
+        'Nigeria is listed but cannot be activated while its payout rail is dark',
         (WidgetTester tester) async {
+      // WeWire exposes no NGN payout rail: the reference data all works, but a
+      // transfer cannot be sent. The destination stays visible so the roadmap
+      // is legible, and is not selectable so nobody reaches a dead Send button.
       await tester.pumpWidget(createTestApp());
       await tester.pumpAndSettle();
 
-      // Tap Nigeria card
       final nigeriaCard = find.byKey(const Key('destination_card_ng'));
       expect(nigeriaCard, findsOneWidget);
+      expect(
+        find.byKey(const Key('destination_unavailable_ng')),
+        findsOneWidget,
+      );
+      expect(find.text('Payouts coming soon'), findsOneWidget);
+
       await tester.tap(nigeriaCard);
       await tester.pumpAndSettle();
 
-      // Verify CTA button updates to Nigeria
-      expect(find.text('Activate Nigeria Travel Mode'), findsOneWidget);
+      // Selection stays on Ghana, and the reason is surfaced rather than
+      // failing silently.
+      expect(find.text('Activate Ghana Travel Mode'), findsOneWidget);
+      expect(
+        find.textContaining('Nigeria payouts are not live yet'),
+        findsOneWidget,
+      );
 
-      // Confirm selection
+      // Nothing was persisted for the unavailable corridor.
       final confirmBtn = find.byKey(const Key('travel_to_home_button'));
       await tester.tap(confirmBtn);
       await tester.pumpAndSettle();
-
-      // Verify server call
-      expect(fakeTravelRepo.setCurrentProfileCallCount, equals(1));
-      expect(fakeTravelRepo.lastSetCountry, equals('NG'));
-
-      // Verify Home screen reflects Nigeria
-      expect(find.text('🇳🇬'), findsAtLeast(1));
-      expect(find.textContaining('₦'), findsAtLeast(1));
+      expect(fakeTravelRepo.lastSetCountry, isNot(equals('NG')));
     });
   });
 }

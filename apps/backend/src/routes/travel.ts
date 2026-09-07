@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/db';
 import { authenticate } from '../middleware/auth';
 import { TravelProfile } from '@prisma/client';
+import { CORRIDORS } from '../lib/corridors';
 
 const router = Router();
 
@@ -9,24 +10,31 @@ export interface DestinationInfo {
   country: string;
   name: string;
   currency: string;
+  /** Display symbol for amounts in this corridor, e.g. 'GH₵'. */
+  symbol: string;
+  /** Channels this corridor can be paid over: MOBILE_MONEY and/or BANK. */
+  channels: string[];
+  /**
+   * Whether a payout can actually be sent. False for a corridor whose
+   * reference data works (banks, account lookup, beneficiaries) but for which
+   * the provider exposes no payout rail -- Nigeria today. The app uses this to
+   * offer the destination without letting a user reach a dead Send button.
+   */
+  payoutAvailable: boolean;
 }
 
 /**
- * Hackathon MVP supported destinations catalog.
- * Shaped as an array so additional countries can be added later without API contract changes.
+ * Supported destinations, derived from the corridor table so the app never
+ * carries its own copy of which rails are live.
  */
-export const SUPPORTED_DESTINATIONS: DestinationInfo[] = [
-  {
-    country: 'GH',
-    name: 'Ghana',
-    currency: 'GHS',
-  },
-  {
-    country: 'NG',
-    name: 'Nigeria',
-    currency: 'NGN',
-  },
-];
+export const SUPPORTED_DESTINATIONS: DestinationInfo[] = CORRIDORS.map((corridor) => ({
+  country: corridor.country,
+  name: corridor.name,
+  currency: corridor.currency,
+  symbol: corridor.symbol,
+  channels: [...corridor.channels],
+  payoutAvailable: corridor.payoutEndpoint !== 'UNSUPPORTED',
+}));
 
 const DESTINATION_LOOKUP: Record<string, DestinationInfo> = {
   GH: SUPPORTED_DESTINATIONS[0],

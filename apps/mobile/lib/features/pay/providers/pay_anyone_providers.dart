@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/config/corridors.dart';
 import '../models/pay_flow_model.dart';
 import '../models/payment_estimate.dart';
 import '../models/payment_quote_model.dart';
@@ -17,18 +18,44 @@ class PayFlowNotifier extends StateNotifier<PayFlowData> {
     required String flag,
     required String currency,
   }) {
+    final corridor = corridorFor(code);
+
+    // A corridor the recipient cannot be paid over must not keep a stale
+    // payment type from the previous destination: Nigeria has no mobile money,
+    // so a flow arriving from Ghana would otherwise land on a MoMo form that
+    // can never be completed.
+    final paymentType = corridor.channels.contains(
+            state.paymentType == PaymentType.mobileMoney ? 'MOBILE_MONEY' : 'BANK')
+        ? state.paymentType
+        : (corridor.hasMobileMoney
+            ? PaymentType.mobileMoney
+            : PaymentType.bankTransfer);
+
+    final channel =
+        paymentType == PaymentType.mobileMoney ? 'MOBILE_MONEY' : 'BANK';
+
     state = state.copyWith(
       countryCode: code,
       countryName: name,
       countryFlag: flag,
       destinationCurrency: currency,
+      paymentType: paymentType,
+      // The old destination's institution code means nothing on the new rail.
+      network: corridor.defaultNetworkFor(channel),
+      recipientPhone: '',
+      accountNumber: '',
+      recipientName: '',
+      recipientNameVerified: false,
     );
   }
 
   void setPaymentType(PaymentType type) {
-    // Default to the first institution of the channel: MTN for mobile money,
-    // GCB for banks. Both are WeWire sort codes.
-    final defaultNetwork = type == PaymentType.mobileMoney ? 'MTN' : 'GCB';
+    // Default to the corridor's first institution for the channel: MTN and GCB
+    // in Ghana, OPay in Nigeria. Always an institution code the rail knows.
+    final corridor = corridorFor(state.destinationCurrency);
+    final defaultNetwork = corridor.defaultNetworkFor(
+      type == PaymentType.mobileMoney ? 'MOBILE_MONEY' : 'BANK',
+    );
     state = state.copyWith(
       paymentType: type,
       network: defaultNetwork,
@@ -68,6 +95,7 @@ class PayFlowNotifier extends StateNotifier<PayFlowData> {
     final estimate = PaymentEstimate.local(
       destinationAmount: amount,
       exchangeRate: state.exchangeRate,
+      destinationCurrency: state.destinationCurrency,
     );
 
     state = state.copyWith(
@@ -107,8 +135,8 @@ class PayFlowNotifier extends StateNotifier<PayFlowData> {
 
 final payFlowProvider =
     StateNotifierProvider<PayFlowNotifier, PayFlowData>((ref) {
-  // Use current live USD to GHS rate or reference fallback
-  final rate = ref.watch(walletToGhsRateProvider);
+  // Live rate from the held wallet currency into the active destination's
+  final rate = ref.watch(walletToDestinationRateProvider);
   return PayFlowNotifier(rate);
 });
 
@@ -197,31 +225,45 @@ final payoutBanksProvider =
   } catch (_) {
     // fall through to the bundled list
   }
-  return kFallbackGhanaBanks;
+  return fallbackBanksFor(currency);
 });
 
-/// Bank account numbers in Ghana run 8-20 digits depending on the bank, so the
-/// check stays deliberately loose, matching the server.
-String? normalizeBankAccountNumber(String input) {
+/// Normalizes a bank account number against the corridor's own rule: Ghana runs
+/// 8-20 digits depending on the bank, Nigeria's NUBAN is exactly 10. Defaults
+/// to the Ghana rule so existing callers are unchanged.
+String? normalizeBankAccountNumber(String input, [String currency = 'GHS']) {
+  final corridor = corridorFor(currency);
   final digits = input.replaceAll(RegExp(r'\D'), '');
-  if (digits.length < 8 || digits.length > 20) return null;
+  if (digits.length < corridor.accountMinDigits ||
+      digits.length > corridor.accountMaxDigits) {
+    return null;
+  }
   return digits;
 }
 
-/// Normalizes a user-typed Ghana mobile number to a 10-digit MSISDN.
-/// Returns null while the number is still too short / not a valid MoMo number,
-/// which is the signal to not attempt a name lookup yet.
-String? normalizeGhanaMsisdn(String input) {
+/// Normalizes a user-typed local mobile number to its national MSISDN for a
+/// corridor. Returns null while the number is too short, is not a valid mobile
+/// money number, or the corridor has no mobile money channel at all -- each of
+/// which is a signal not to attempt a name lookup yet.
+String? normalizeMsisdn(String input, [String currency = 'GHS']) {
+  final corridor = corridorFor(currency);
+  final pattern = corridor.msisdnPattern;
+  if (pattern == null) return null;
+
+  final trunk = corridor.dialCode.replaceAll('+', '');
   final digits = input.replaceAll(RegExp(r'\D'), '');
   var msisdn = digits;
-  if (digits.startsWith('233') && digits.length == 12) {
-    msisdn = '0${digits.substring(3)}';
+  if (digits.startsWith(trunk) && digits.length == trunk.length + 9) {
+    msisdn = '0${digits.substring(trunk.length)}';
   } else if (digits.length == 9) {
     msisdn = '0$digits';
   }
-  if (!RegExp(r'^0[235]\d{8}$').hasMatch(msisdn)) return null;
+  if (!pattern.hasMatch(msisdn)) return null;
   return msisdn;
 }
+
+/// Ghana-specific spelling of [normalizeMsisdn], kept for existing callers.
+String? normalizeGhanaMsisdn(String input) => normalizeMsisdn(input, 'GHS');
 
 /// Ghana mobile money networks supported by the payout rail.
 const List<String> kGhanaMoMoNetworks = ['MTN', 'Telecel', 'AirtelTigo'];
@@ -237,6 +279,14 @@ const Map<String, List<String>> kGhanaNetworkPrefixes = {
 /// Infers the mobile money network from a Ghana number, or null when the
 /// number is incomplete or its prefix is not allocated to a known operator.
 /// The user can always override the inferred value.
+/// Infers the mobile money operator from a local number, for corridors that
+/// have one. Nigeria has no mobile money channel, so there is nothing to infer
+/// and this returns null there.
+String? inferNetworkFromPhone(String phoneInput, [String currency = 'GHS']) {
+  if (!corridorFor(currency).hasMobileMoney) return null;
+  return inferGhanaNetwork(phoneInput);
+}
+
 String? inferGhanaNetwork(String phoneInput) {
   final msisdn = normalizeGhanaMsisdn(phoneInput);
   if (msisdn == null) return null;
@@ -256,11 +306,15 @@ class RecipientLookup {
   final String network;
   final String channel;
 
+  /// Payout currency, which decides how the account is validated.
+  final String currency;
+
   const RecipientLookup({
     this.phone = '',
     this.accountNumber = '',
     required this.network,
     this.channel = 'MOBILE_MONEY',
+    this.currency = 'GHS',
   });
 
   bool get isBank => channel == 'BANK';
@@ -268,8 +322,8 @@ class RecipientLookup {
   /// The destination account in the form the backend expects, or null while the
   /// user has not typed enough for a lookup to make sense.
   String? get destinationAccount => isBank
-      ? normalizeBankAccountNumber(accountNumber)
-      : normalizeGhanaMsisdn(phone);
+      ? normalizeBankAccountNumber(accountNumber, currency)
+      : normalizeMsisdn(phone, currency);
 
   @override
   bool operator ==(Object other) =>
@@ -278,10 +332,12 @@ class RecipientLookup {
           other.phone == phone &&
           other.accountNumber == accountNumber &&
           other.network == network &&
-          other.channel == channel;
+          other.channel == channel &&
+          other.currency == currency;
 
   @override
-  int get hashCode => Object.hash(phone, accountNumber, network, channel);
+  int get hashCode =>
+      Object.hash(phone, accountNumber, network, channel, currency);
 }
 
 /// Debounced recipient name confirmation for the Pay Anyone flow. The backend

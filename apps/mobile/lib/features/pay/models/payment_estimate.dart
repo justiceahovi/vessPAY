@@ -13,6 +13,18 @@ class PaymentEstimate {
   /// WEWIRE_PROCESSOR_FEE_GHS default.
   static const double wewireProcessorFeeGhs = 5.0;
 
+  /// The same flat fee per corridor, denominated in the payout currency and
+  /// mirroring lib/corridors.ts. Ghana's 5 is measured; Nigeria's 1000 was read
+  /// off a live disbursement record. The server's quote is authoritative -- this
+  /// only has to be close enough that the figure does not jump on arrival.
+  static const Map<String, double> wewireProcessorFees = {
+    'GHS': 5.0,
+    'NGN': 1000.0,
+  };
+
+  static double processorFeeFor(String currency) =>
+      wewireProcessorFees[currency.toUpperCase()] ?? 0.0;
+
   final double destinationAmount;
   final double sourceAmount;
   final double fee;
@@ -45,6 +57,7 @@ class PaymentEstimate {
   factory PaymentEstimate.local({
     required double destinationAmount,
     required double exchangeRate,
+    String destinationCurrency = 'GHS',
   }) {
     final rate = exchangeRate > 0 ? exchangeRate : 11.58;
     if (destinationAmount <= 0) {
@@ -64,8 +77,9 @@ class PaymentEstimate {
     final fee = double.parse(
       (rawFee < minimumFee ? minimumFee : rawFee).toStringAsFixed(2),
     );
-    final wewireFee =
-        double.parse((wewireProcessorFeeGhs / rate).toStringAsFixed(2));
+    final wewireFee = double.parse(
+      (processorFeeFor(destinationCurrency) / rate).toStringAsFixed(2),
+    );
     final total =
         double.parse((sourceAmount + fee + wewireFee).toStringAsFixed(2));
 

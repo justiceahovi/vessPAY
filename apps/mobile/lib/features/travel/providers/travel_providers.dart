@@ -1,21 +1,21 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/config/corridors.dart';
 import '../models/destination_model.dart';
 import '../models/travel_profile_model.dart';
 import '../repositories/travel_repository.dart';
 
-/// Default supported corridors for instant display & offline resiliency
-const List<DestinationModel> kDefaultDestinations = [
-  DestinationModel(
-    country: 'GH',
-    name: 'Ghana',
-    currency: 'GHS',
-  ),
-  DestinationModel(
-    country: 'NG',
-    name: 'Nigeria',
-    currency: 'NGN',
-  ),
-];
+/// Default supported corridors for instant display & offline resiliency,
+/// derived from the bundled corridor table so payout availability cannot drift
+/// between this list and the rest of the app.
+final List<DestinationModel> kDefaultDestinations = kCorridors
+    .map((c) => DestinationModel(
+          country: c.country,
+          name: c.name,
+          currency: c.currency,
+          payoutAvailable: c.payoutAvailable,
+          channels: c.channels,
+        ))
+    .toList();
 
 /// Fetches supported destinations from GET /api/travel/destinations
 final destinationsProvider =

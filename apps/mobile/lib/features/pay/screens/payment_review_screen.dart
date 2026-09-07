@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/config/corridors.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../wallet/models/wallet_currency_model.dart';
@@ -44,6 +45,7 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
     final estimate = PaymentEstimate.local(
       destinationAmount: payData.destinationAmount,
       exchangeRate: payData.exchangeRate,
+      destinationCurrency: payData.destinationCurrency,
     );
     final fallbackQuote = PaymentQuoteModel(
       sourceCurrency: payData.sourceCurrency,
@@ -208,7 +210,7 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
     // The wallet is not necessarily in USD, so every source-side figure is
     // formatted with the currency the quote was actually priced in.
     final sourceCurrency = resolveWalletCurrency(quote.sourceCurrency);
-    final destCurrencySymbol = quote.destinationCurrency == 'NGN' ? '₦' : 'GH₵';
+    final destCurrencySymbol = corridorFor(quote.destinationCurrency).symbol;
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
@@ -298,9 +300,9 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              const Text(
-                                'Recipient Gets (GHS)',
-                                style: TextStyle(
+                              Text(
+                                'Recipient Gets (${quote.destinationCurrency})',
+                                style: const TextStyle(
                                   fontFamily: 'StyreneB',
                                   fontSize: 12,
                                   color: AppColors.onDarkSoft,
@@ -308,7 +310,7 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'GH₵${destAmount.toStringAsFixed(2)}',
+                                '$destCurrencySymbol${destAmount.toStringAsFixed(2)}',
                                 key: const Key('review_recipient_gets_header'),
                                 style: const TextStyle(
                                   fontFamily: 'Copernicus',
@@ -458,7 +460,7 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
                   children: [
                     _buildDetailRow(
                       label: 'Recipient Receives',
-                      value: 'GH₵${destAmount.toStringAsFixed(2)}',
+                      value: '$destCurrencySymbol${destAmount.toStringAsFixed(2)}',
                       valueKey: const Key('review_destination_amount'),
                     ),
                     const SizedBox(height: 10),

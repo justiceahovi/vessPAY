@@ -15,6 +15,7 @@ import 'package:vesspay/features/travel/repositories/travel_repository.dart';
 import 'package:vesspay/features/wallet/models/topup_model.dart';
 import 'package:vesspay/features/wallet/models/wallet_balance_model.dart';
 import 'package:vesspay/features/wallet/models/wallet_currency_model.dart';
+import 'package:vesspay/features/wallet/providers/wallet_providers.dart';
 import 'package:vesspay/features/wallet/repositories/wallet_repository.dart';
 import 'package:vesspay/features/pay/models/transaction_model.dart';
 
@@ -181,6 +182,10 @@ void main() {
           walletRepositoryProvider.overrideWithValue(walletRepo),
           travelRepositoryProvider.overrideWithValue(travelRepo),
           routerProvider.overrideWithValue(router),
+          // The rate provider follows the active destination, so it refires
+          // when the travel profile resolves. Pinned here so the widget test
+          // never reaches the network.
+          liveExchangeRateProvider.overrideWith((ref) async => 15.50),
         ],
         child: MaterialApp.router(
           theme: AppTheme.lightTheme,

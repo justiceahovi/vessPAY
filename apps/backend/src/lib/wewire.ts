@@ -16,7 +16,7 @@ export {
 } from './wewire-institutions';
 export type { PayoutChannel, WeWireInstitution, ResolvedInstitution } from './wewire-institutions';
 
-import { getCorridor } from './corridors';
+import { getCorridor, type Corridor } from './corridors';
 export {
   CORRIDORS,
   findCorridor,
@@ -509,6 +509,13 @@ export interface ExchangeRateResult {
   to: string;
   rate: number;
   asOf: string;
+  /**
+   * How the rate was arrived at: a published pair ('direct'), the published
+   * pair read backwards ('inverse'), or two legs crossed through an
+   * intermediary ('via:USD'). Diagnostic only -- the API response shape is
+   * unchanged.
+   */
+  via?: string;
 }
 
 interface RatesCache {
@@ -539,6 +546,11 @@ export async function getWeWireRates(forceRefresh = false): Promise<WeWireRateIt
       { from: 'EUR', to: 'GHS', bid: '12.85', ask: '750', updatedAt: new Date().toISOString() },
       { from: 'GBP', to: 'GHS', bid: '15.01', ask: '0', updatedAt: new Date().toISOString() },
       { from: 'USD', to: 'NGN', bid: '843.55', ask: '850.4', updatedAt: new Date().toISOString() },
+      // The USD legs matter as much as the corridor pairs: without them a
+      // cross like GBP->USD->NGN cannot complete, so a corridor that works
+      // online silently stops quoting whenever WeWire is unreachable.
+      { from: 'USD', to: 'GBP', bid: '0.7355', ask: '0.7355', updatedAt: new Date().toISOString() },
+      { from: 'EUR', to: 'USD', bid: '1.05', ask: '1.12', updatedAt: new Date().toISOString() },
     ];
   }
 
@@ -578,6 +590,11 @@ export async function getWeWireRates(forceRefresh = false): Promise<WeWireRateIt
       { from: 'EUR', to: 'GHS', bid: '12.85', ask: '750', updatedAt: new Date().toISOString() },
       { from: 'GBP', to: 'GHS', bid: '15.01', ask: '0', updatedAt: new Date().toISOString() },
       { from: 'USD', to: 'NGN', bid: '843.55', ask: '850.4', updatedAt: new Date().toISOString() },
+      // The USD legs matter as much as the corridor pairs: without them a
+      // cross like GBP->USD->NGN cannot complete, so a corridor that works
+      // online silently stops quoting whenever WeWire is unreachable.
+      { from: 'USD', to: 'GBP', bid: '0.7355', ask: '0.7355', updatedAt: new Date().toISOString() },
+      { from: 'EUR', to: 'USD', bid: '1.05', ask: '1.12', updatedAt: new Date().toISOString() },
     ];
   }
 }
@@ -585,6 +602,62 @@ export async function getWeWireRates(forceRefresh = false): Promise<WeWireRateIt
 /**
  * Retrieves the exchange rate for a specific currency pair (e.g. from USD to GHS).
  * Returns ExchangeRateResult or null if the pair is not supported.
+ */
+/** The currency every cross is routed through when no direct pair exists. */
+const CROSS_CURRENCY = 'USD';
+
+interface Leg {
+  rate: number;
+  asOf: string;
+}
+
+/** A published pair read forwards, e.g. USD->NGN from { from: USD, to: NGN }. */
+function directLeg(rates: WeWireRateItem[], from: string, to: string): Leg | null {
+  const match = rates.find((r) => r.from.toUpperCase() === from && r.to.toUpperCase() === to);
+  if (!match) return null;
+
+  const bid = parseFloat(match.bid);
+  const ask = parseFloat(match.ask);
+  const rate = bid > 0 ? bid : ask;
+  if (!(rate > 0)) return null;
+
+  return { rate, asOf: match.updatedAt || new Date().toISOString() };
+}
+
+/** A published pair read backwards, e.g. GBP->USD from { from: USD, to: GBP }. */
+function inverseLeg(rates: WeWireRateItem[], from: string, to: string): Leg | null {
+  const match = rates.find((r) => r.from.toUpperCase() === to && r.to.toUpperCase() === from);
+  if (!match) return null;
+
+  const bid = parseFloat(match.bid);
+  const ask = parseFloat(match.ask);
+  const baseRate = ask > 0 ? ask : bid;
+  if (!(baseRate > 0)) return null;
+
+  return {
+    rate: parseFloat((1 / baseRate).toFixed(6)),
+    asOf: match.updatedAt || new Date().toISOString(),
+  };
+}
+
+/**
+ * Retrieves the exchange rate for a specific currency pair (e.g. from USD to GHS).
+ * Returns ExchangeRateResult or null if the pair cannot be priced at all.
+ *
+ * Resolution order:
+ *   1. The published pair. A direct quote always wins, so the day WeWire
+ *      publishes GBP/NGN this starts using it with no code change.
+ *   2. A cross through USD, when both legs are available. This is what makes
+ *      GBP and EUR spendable into Nigeria, where only USD/NGN is published.
+ *   3. The published pair read backwards.
+ *
+ * The cross deliberately outranks the inverse. The sandbox carries a stale
+ * NGN->EUR of 0.0006, which inverts to ~1667 NGN/EUR while USD/NGN sits at
+ * 843.55 -- reading that backwards would misprice a payout by roughly 2x. The
+ * cross stays anchored to the same USD leg every other corridor is priced off.
+ *
+ * No spread is applied: this returns the mid the table gives. Any markup is a
+ * pricing decision and belongs above this function, not buried in it.
  */
 export async function getExchangeRate(
   fromCurrency: string,
@@ -596,36 +669,36 @@ export async function getExchangeRate(
 
   const rates = await getWeWireRates(forceRefresh);
 
-  // 1. Direct match: from -> to
-  const directMatch = rates.find((r) => r.from.toUpperCase() === from && r.to.toUpperCase() === to);
-  if (directMatch) {
-    const bid = parseFloat(directMatch.bid);
-    const ask = parseFloat(directMatch.ask);
-    const rate = bid > 0 ? bid : ask;
-    if (rate > 0) {
-      return {
-        from,
-        to,
-        rate,
-        asOf: directMatch.updatedAt || new Date().toISOString(),
-      };
+  // 1. The published pair always wins.
+  const direct = directLeg(rates, from, to);
+  if (direct) {
+    return { from, to, rate: direct.rate, asOf: direct.asOf, via: 'direct' };
+  }
+
+  // 2. Cross through USD. Each leg may itself be published either way round.
+  if (from !== CROSS_CURRENCY && to !== CROSS_CURRENCY) {
+    const first = directLeg(rates, from, CROSS_CURRENCY) || inverseLeg(rates, from, CROSS_CURRENCY);
+    const second = directLeg(rates, CROSS_CURRENCY, to) || inverseLeg(rates, CROSS_CURRENCY, to);
+
+    if (first && second) {
+      const crossed = first.rate * second.rate;
+      if (crossed > 0) {
+        return {
+          from,
+          to,
+          rate: parseFloat(crossed.toFixed(6)),
+          // The cross is only as fresh as its stalest leg.
+          asOf: first.asOf < second.asOf ? first.asOf : second.asOf,
+          via: `via:${CROSS_CURRENCY}`,
+        };
+      }
     }
   }
 
-  // 2. Inverse match: to -> from
-  const inverseMatch = rates.find((r) => r.from.toUpperCase() === to && r.to.toUpperCase() === from);
-  if (inverseMatch) {
-    const bid = parseFloat(inverseMatch.bid);
-    const ask = parseFloat(inverseMatch.ask);
-    const baseRate = ask > 0 ? ask : bid;
-    if (baseRate > 0) {
-      return {
-        from,
-        to,
-        rate: parseFloat((1 / baseRate).toFixed(6)),
-        asOf: inverseMatch.updatedAt || new Date().toISOString(),
-      };
-    }
+  // 3. Fall back to reading the published pair backwards.
+  const inverse = inverseLeg(rates, from, to);
+  if (inverse) {
+    return { from, to, rate: inverse.rate, asOf: inverse.asOf, via: 'inverse' };
   }
 
   return null;
@@ -964,6 +1037,121 @@ export interface SendWeWireDisbursementParams {
   recipientName: string;
   reference?: string;
   memo?: string;
+  /**
+   * WeWire beneficiary *account* id (Beneficiary.wewireAccountId). Required by
+   * corridors that pay out over /v1/transactions/initiate-payout, which
+   * addresses a registered account rather than inline account details.
+   */
+  beneficiaryAccountId?: string | null;
+  /**
+   * Wallet the payout is funded from. Defaults to the payout currency, which
+   * keeps the pre-funded-float model: an NGN payout draws the NGN float rather
+   * than converting out of a GBP or USD one.
+   */
+  fundingCurrency?: string | null;
+}
+
+/**
+ * Payout over POST /v1/transactions/initiate-payout.
+ *
+ * The Africa disbursements endpoint is Ghana-only ("starts a Ghana bank
+ * disbursement from the sub-customer GHST wallet"), so every other corridor
+ * goes out through this one. It differs in two ways that matter: the recipient
+ * is a pre-registered beneficiary *account id* rather than inline account
+ * details, and the funding wallet is named explicitly by `from`.
+ *
+ * `from` defaults to the payout currency so the corridor draws its own
+ * pre-funded float, matching how Ghana already works. Passing a different
+ * fundingCurrency asks WeWire to convert, which is a treasury decision -- it
+ * would debit that wallet instead.
+ */
+async function initiateWeWirePayout(
+  params: SendWeWireDisbursementParams,
+  corridor: Corridor
+): Promise<SendWeWireDisbursementResult> {
+  const apiKey = process.env.WEWIRE_API_KEY;
+  const baseUrl = (process.env.WEWIRE_BASE_URL || 'https://stage-capi.wewireafrica.com').replace(/\/$/, '');
+
+  const currency = corridor.currency;
+  const fundingCurrency = (params.fundingCurrency || currency).trim().toUpperCase();
+
+  // The validator's own enum, read back off a 400 on 2026-09-07. Checked here
+  // so a misconfigured corridor fails locally instead of round-tripping.
+  const OFFSHORE_CURRENCIES = ['EUR', 'GBP', 'USD'];
+  if (!OFFSHORE_CURRENCIES.includes(currency) || !OFFSHORE_CURRENCIES.includes(fundingCurrency)) {
+    throw new Error(
+      `/v1/transactions/initiate-payout only carries ${OFFSHORE_CURRENCIES.join(', ')}; ` +
+        `${fundingCurrency}->${currency} is not routable over it`
+    );
+  }
+
+  if (!params.beneficiaryAccountId) {
+    throw new Error(
+      `A registered beneficiary account is required to pay out to ${corridor.name}. ` +
+        'Create the beneficiary first so its WeWire account id can be used.'
+    );
+  }
+
+  if (!apiKey) {
+    console.warn('WEWIRE_API_KEY is not configured; using fallback payout stub');
+    return {
+      wewireTransactionId: `ww_tx_stub_${Date.now()}`,
+      status: 'PENDING',
+      amount: params.amount.toString(),
+      currency,
+      channel: params.channel,
+    };
+  }
+
+  const payload = {
+    idempotencyKey: params.idempotencyKey,
+    from: fundingCurrency,
+    to: currency,
+    amount: params.amount,
+    description: params.memo || 'VessPay Payout',
+    beneficiaryAccountId: params.beneficiaryAccountId,
+    reference: params.reference || undefined,
+  };
+
+  const response = await fetch(`${baseUrl}/v1/transactions/initiate-payout`, {
+    method: 'POST',
+    headers: { 'ww-api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await response.text();
+  let data: any;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = text;
+  }
+
+  if (!response.ok) {
+    const errMsg =
+      typeof data === 'object' && data?.error?.message
+        ? data.error.message
+        : typeof data === 'object' && data?.message
+        ? data.message
+        : JSON.stringify(data);
+    throw new Error(`WeWire payout failed: ${errMsg} (Status: ${response.status})`);
+  }
+
+  // This endpoint answers { message, transactionId }, unlike the disbursements
+  // endpoint's full transaction object.
+  const wewireTransactionId = data?.transactionId || data?.id;
+  if (!wewireTransactionId) {
+    throw new Error('WeWire did not return a transaction ID in payout response');
+  }
+
+  return {
+    wewireTransactionId,
+    status: data?.status || 'PENDING',
+    amount: data?.amount ? String(data.amount) : String(params.amount),
+    fee: data?.fee ? String(data.fee) : undefined,
+    currency: data?.currency || currency,
+    channel: data?.channel || params.channel,
+  };
 }
 
 export interface SendWeWireDisbursementResult {
@@ -995,6 +1183,21 @@ export async function sendWeWireDisbursement(
     throw new Error(
       `${corridor.name} cannot be paid over the ${channel} channel`
     );
+  }
+
+  // A corridor with no payout rail fails here, before a transaction is
+  // dispatched: WeWire would otherwise take the request, move the float and
+  // reverse it, and answer with an error the user cannot act on.
+  if (corridor.payoutEndpoint === 'UNSUPPORTED') {
+    throw new Error(
+      `WeWire does not currently offer a payout rail for ${corridor.name} (${currency}). ` +
+        'Recipient lookup and beneficiary registration work, but the payout itself cannot be sent yet.'
+    );
+  }
+
+  // Offshore corridors go out through the general payout endpoint instead.
+  if (corridor.payoutEndpoint === 'INITIATE_PAYOUT') {
+    return initiateWeWirePayout(params, corridor);
   }
 
   // Mobile money is addressed by MSISDN, a bank account by its account number.

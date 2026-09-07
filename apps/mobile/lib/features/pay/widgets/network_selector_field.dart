@@ -68,6 +68,16 @@ class NetworkSelectorField extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final bool autoDetected;
 
+  /// How many leading options are "pinned" -- shown above the rest under
+  /// [pinnedLabel]. Used for the Nigerian wallets, which are ordinary bank
+  /// entries but are what most people are actually looking for.
+  final int pinnedCount;
+  final String pinnedLabel;
+
+  /// Swaps the dropdown for a searchable sheet. A dropdown is comfortable for
+  /// Ghana's 28 institutions and unusable for Nigeria's 422.
+  final bool searchable;
+
   const NetworkSelectorField({
     super.key,
     required this.label,
@@ -75,6 +85,9 @@ class NetworkSelectorField extends StatelessWidget {
     required this.options,
     required this.onChanged,
     this.autoDetected = false,
+    this.pinnedCount = 0,
+    this.pinnedLabel = '',
+    this.searchable = false,
   });
 
   @override
@@ -128,6 +141,15 @@ class NetworkSelectorField extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
+        if (searchable)
+          _SearchableNetworkField(
+            selected: selected,
+            options: options,
+            pinnedCount: pinnedCount,
+            pinnedLabel: pinnedLabel,
+            onChanged: onChanged,
+          )
+        else
         DropdownButtonFormField<String>(
           key: const Key('pay_network_dropdown'),
           initialValue: selected,
@@ -173,6 +195,240 @@ class NetworkSelectorField extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(color: color, width: width),
       );
+}
+
+/// The searchable variant: a tappable field that opens a filterable sheet.
+///
+/// Nigeria's institution list is 422 entries long, which a dropdown cannot
+/// present usefully. The wallets people actually reach for (OPay, PalmPay,
+/// Moniepoint, Kuda, Paga) are pinned above the alphabetical banks, and typing
+/// filters on both the institution name and its code, so someone who knows the
+/// NIP code can enter it directly.
+class _SearchableNetworkField extends StatelessWidget {
+  final String selected;
+  final List<NetworkOption> options;
+  final int pinnedCount;
+  final String pinnedLabel;
+  final ValueChanged<String> onChanged;
+
+  const _SearchableNetworkField({
+    required this.selected,
+    required this.options,
+    required this.pinnedCount,
+    required this.pinnedLabel,
+    required this.onChanged,
+  });
+
+  NetworkOption? get _selectedOption {
+    for (final o in options) {
+      if (o.value == selected) return o;
+    }
+    return options.isNotEmpty ? options.first : null;
+  }
+
+  Future<void> _openPicker(BuildContext context) async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _NetworkPickerSheet(
+        options: options,
+        selected: selected,
+        pinnedCount: pinnedCount,
+        pinnedLabel: pinnedLabel,
+      ),
+    );
+    if (picked != null) {
+      HapticFeedback.selectionClick();
+      onChanged(picked);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final option = _selectedOption;
+
+    return InkWell(
+      key: const Key('pay_network_search_field'),
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => _openPicker(context),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          filled: true,
+          fillColor: AppColors.surfaceCard,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          border: _fieldBorder(AppColors.hairline, 1),
+          enabledBorder: _fieldBorder(AppColors.hairline, 1),
+          focusedBorder: _fieldBorder(AppColors.primary, 1.5),
+          suffixIcon: const Icon(
+            Icons.search_rounded,
+            color: AppColors.muted,
+            size: 20,
+          ),
+        ),
+        child: option == null
+            ? Text(
+                'Select a bank',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: AppColors.muted,
+                ),
+              )
+            : _OptionRow(option: option),
+      ),
+    );
+  }
+}
+
+OutlineInputBorder _fieldBorder(Color color, double width) =>
+    OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: color, width: width),
+    );
+
+class _NetworkPickerSheet extends StatefulWidget {
+  final List<NetworkOption> options;
+  final String selected;
+  final int pinnedCount;
+  final String pinnedLabel;
+
+  const _NetworkPickerSheet({
+    required this.options,
+    required this.selected,
+    required this.pinnedCount,
+    required this.pinnedLabel,
+  });
+
+  @override
+  State<_NetworkPickerSheet> createState() => _NetworkPickerSheetState();
+}
+
+class _NetworkPickerSheetState extends State<_NetworkPickerSheet> {
+  String _query = '';
+
+  bool _matches(NetworkOption o) {
+    if (_query.isEmpty) return true;
+    final q = _query.toLowerCase();
+    return o.displayName.toLowerCase().contains(q) ||
+        o.value.toLowerCase().contains(q);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pinned = widget.options
+        .take(widget.pinnedCount)
+        .where(_matches)
+        .toList();
+    final rest =
+        widget.options.skip(widget.pinnedCount).where(_matches).toList();
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.8,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.canvas,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 38,
+            height: 4,
+            margin: const EdgeInsets.only(top: 12, bottom: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFD1D5DB),
+              borderRadius: BorderRadius.circular(100),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: TextField(
+              key: const Key('pay_network_search_input'),
+              autofocus: true,
+              onChanged: (v) => setState(() => _query = v.trim()),
+              decoration: InputDecoration(
+                hintText: 'Search bank or code',
+                prefixIcon: const Icon(Icons.search_rounded,
+                    color: AppColors.muted, size: 20),
+                filled: true,
+                fillColor: AppColors.surfaceCard,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                border: _fieldBorder(AppColors.hairline, 1),
+                enabledBorder: _fieldBorder(AppColors.hairline, 1),
+                focusedBorder: _fieldBorder(AppColors.primary, 1.5),
+              ),
+            ),
+          ),
+          Flexible(
+            child: (pinned.isEmpty && rest.isEmpty)
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 32),
+                    child: Text(
+                      'No bank matches "$_query"',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  )
+                : ListView(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.only(bottom: 20),
+                    children: [
+                      if (pinned.isNotEmpty) ...[
+                        _sectionHeader(widget.pinnedLabel),
+                        ...pinned.map(_tile),
+                      ],
+                      if (rest.isNotEmpty) ...[
+                        if (pinned.isNotEmpty) _sectionHeader('All banks'),
+                        ...rest.map(_tile),
+                      ],
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionHeader(String text) => Padding(
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 6),
+        child: Text(
+          text.toUpperCase(),
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.6,
+            color: AppColors.muted,
+          ),
+        ),
+      );
+
+  Widget _tile(NetworkOption option) {
+    final isSelected = option.value == widget.selected;
+    return ListTile(
+      key: option.itemKey,
+      dense: true,
+      title: _OptionRow(option: option),
+      subtitle: Text(
+        option.value,
+        style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.muted),
+      ),
+      trailing: isSelected
+          ? const Icon(Icons.check_rounded,
+              color: AppColors.primary, size: 20)
+          : null,
+      onTap: () => Navigator.of(context).pop(option.value),
+    );
+  }
 }
 
 class _OptionRow extends StatelessWidget {

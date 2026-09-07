@@ -353,12 +353,25 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
         return;
       }
 
-      // An explicit channel wins, otherwise the institution decides
+      // An explicit channel wins, otherwise the institution decides. This
+      // re-derivation overrides the corridor default set above, so the corridor
+      // has to be re-checked here too -- otherwise an explicit MOBILE_MONEY on
+      // a bank-only corridor slips past the earlier guard.
       channel = ((body.channel || '').toString().trim().toUpperCase() === 'BANK'
         ? 'BANK'
         : (body.channel || '').toString().trim().toUpperCase() === 'MOBILE_MONEY'
         ? 'MOBILE_MONEY'
         : institution.channel) as PayoutChannel;
+
+      if (!corridor.channels.includes(channel)) {
+        res.status(400).json({
+          error: {
+            code: 'UNSUPPORTED_CHANNEL',
+            message: `${corridor.name} cannot be paid over the ${channel} channel. Supported: ${corridor.channels.join(', ')}`,
+          },
+        });
+        return;
+      }
 
       if (channel !== institution.channel) {
         res.status(400).json({
@@ -593,6 +606,9 @@ router.post('/', authenticate, async (req: Request, res: Response): Promise<void
         recipientName: recipientName || beneficiary?.name || 'Recipient',
         reference: `VP-PAY-${transaction.id.replace(/-/g, '').slice(0, 12)}`,
         memo: 'VessPay Payout',
+        // Corridors paid over /v1/transactions/initiate-payout address the
+        // recipient by registered account id rather than inline details.
+        beneficiaryAccountId: beneficiary?.wewireAccountId || null,
       });
     } catch (err: any) {
       console.error('WeWire disbursement request failed:', err);

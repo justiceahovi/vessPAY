@@ -40,6 +40,24 @@ export interface Corridor {
   processorFee: number;
   /** True once a payout has actually been observed settling on this rail. */
   feeConfirmed: boolean;
+  /**
+   * Which WeWire endpoint pays this corridor out.
+   *
+   * 'AFRICA_DISBURSEMENT' is POST /v1/disbursements: recipient addressed
+   * inline by accountCode + accountNumber. Per WeWire's API reference it
+   * "starts a Ghana bank disbursement from the sub-customer GHST wallet" --
+   * it is Ghana-only, which is exactly why every Ghana payout debits GHST.
+   *
+   * 'INITIATE_PAYOUT' is POST /v1/transactions/initiate-payout. Despite the
+   * name it is the *offshore* endpoint: its validator rejects anything outside
+   * EUR/GBP/USD on both `from` and `to` (verified 2026-09-07). It cannot carry
+   * an African currency.
+   *
+   * 'UNSUPPORTED' means WeWire exposes no payout rail for this corridor yet,
+   * even though its reference data (banks, account lookup, beneficiaries,
+   * wallets) all work. Fail fast rather than spend a real payout attempt.
+   */
+  payoutEndpoint: 'AFRICA_DISBURSEMENT' | 'INITIATE_PAYOUT' | 'UNSUPPORTED';
 }
 
 export const CORRIDORS: Corridor[] = [
@@ -59,6 +77,8 @@ export const CORRIDORS: Corridor[] = [
     // asset (GHST), regardless of the amount sent.
     processorFee: 5.0,
     feeConfirmed: true,
+    // Proven working end to end; do not move Ghana onto the other endpoint.
+    payoutEndpoint: 'AFRICA_DISBURSEMENT',
   },
   {
     country: 'NG',
@@ -72,13 +92,24 @@ export const CORRIDORS: Corridor[] = [
     // NUBAN is exactly 10 digits.
     accountNumber: { min: 10, max: 10 },
     msisdnPattern: null,
-    // PLACEHOLDER, not yet measured: no NGN payout has settled yet, so this is
-    // an estimate deliberately set high enough to over-collect rather than
-    // under-collect (the quote is reconciled against WeWire's actual fee once
-    // the payout is sent). Replace with the observed value -- and set
-    // feeConfirmed -- after the first live NGN disbursement.
-    processorFee: 400.0,
+    // Observed on a live NGN disbursement (2026-09-07): WeWire charged a flat
+    // 1000, the same shape as Ghana's flat 5. Taken from a payout WeWire then
+    // rejected downstream, so the figure is theirs but no NGN payout has yet
+    // settled SUCCESSFUL -- worth re-checking against the first one that does.
+    processorFee: 1000.0,
     feeConfirmed: false,
+    // Verified against the sandbox 2026-09-07: WeWire has no NGN payout rail.
+    //   /v1/disbursements            -> Ghana-only; took the NGN request,
+    //                                   debited and refunded the NGN wallet,
+    //                                   then failed with a bare
+    //                                   "Disbursement failed".
+    //   /v1/transactions/initiate-payout -> VALIDATION_FAILED, "from/to must be
+    //                                   one of the following values: EUR, GBP,
+    //                                   USD". Offshore rails only.
+    // Everything *around* the payout works (banks, account lookup, beneficiary
+    // registration, the funded NGN wallet), so flip this to the right value
+    // the moment WeWire ships the rail.
+    payoutEndpoint: 'UNSUPPORTED',
   },
 ];
 

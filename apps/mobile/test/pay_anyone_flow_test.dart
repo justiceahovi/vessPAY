@@ -616,7 +616,7 @@ void main() {
           find.byKey(const Key('pay_account_number_field')), '12345');
       await tester.tap(find.byKey(const Key('pay_continue_to_review_button')));
       await tester.pumpAndSettle();
-      expect(find.text('Please enter a valid account number (8-20 digits)'),
+      expect(find.text('Please enter a valid Ghana account number (8-20 digits)'),
           findsOneWidget);
       expect(find.byType(PaymentReviewScreen), findsNothing);
     });
@@ -1012,7 +1012,9 @@ void main() {
 
       expect(estimate.sourceAmount, 12.95);
       expect(estimate.fee, 0.13);
-      expect(estimate.total, 13.08);
+      // WeWire's flat 5 GHS processor fee, converted at the same rate.
+      expect(estimate.wewireFee, 0.43);
+      expect(estimate.total, 13.51);
     });
 
     test('the fee never rounds below the one cent minimum', () {
@@ -1021,7 +1023,25 @@ void main() {
 
       expect(estimate.sourceAmount, 0.09);
       expect(estimate.fee, 0.01);
-      expect(estimate.total, 0.10);
+      expect(estimate.total, 0.53);
+    });
+
+    test('the processor fee is the corridor\'s, not always Ghana\'s', () {
+      // Nigeria's flat fee is 1000 NGN against Ghana's 5 GHS, so a corridor
+      // that fell back to the Ghana figure would under-collect by ~200x.
+      final ghana = PaymentEstimate.local(
+        destinationAmount: 150.0,
+        exchangeRate: 11.58,
+        destinationCurrency: 'GHS',
+      );
+      final nigeria = PaymentEstimate.local(
+        destinationAmount: 50000.0,
+        exchangeRate: 1146.906607,
+        destinationCurrency: 'NGN',
+      );
+
+      expect(ghana.wewireFee, 0.43);
+      expect(nigeria.wewireFee, 0.87);
     });
 
     test('an empty amount produces an empty estimate', () {

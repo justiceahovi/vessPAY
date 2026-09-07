@@ -6,34 +6,48 @@ import '../models/deposit_account_model.dart';
 import '../models/topup_model.dart';
 import '../models/wallet_balance_model.dart';
 import '../repositories/wallet_repository.dart';
+import '../../travel/providers/travel_providers.dart';
 import 'currency_providers.dart';
 
-/// Fetches the live exchange rate from the user's wallet currency into GHS
-/// via backend `GET /api/rates?from=<wallet currency>&to=GHS`
+/// Fallback used only until the live rate resolves. Per corridor, because a
+/// single number cannot stand in for both a ~15 GHS and a ~1150 NGN rate --
+/// showing 15.50 to a Nigeria user would be off by two orders of magnitude.
+const Map<String, double> _kFallbackRates = {
+  'GHS': 15.50,
+  'NGN': 1146.90,
+};
+
+double _fallbackRateFor(String currency) =>
+    _kFallbackRates[currency.toUpperCase()] ?? 15.50;
+
+/// Fetches the live exchange rate from the user's wallet currency into the
+/// currency of the destination they are travelling to, via backend
+/// `GET /api/rates?from=<wallet currency>&to=<destination currency>`.
 final liveExchangeRateProvider = FutureProvider<double>((ref) async {
   final apiClient = ref.watch(apiClientProvider);
   final fromCurrency = ref.watch(activeWalletCurrencyCodeProvider);
+  final toCurrency = ref.watch(activeDestinationCurrencyProvider) ?? 'GHS';
   try {
     final res = await apiClient.get<Map<String, dynamic>>(
       '/api/rates',
-      queryParameters: {'from': fromCurrency, 'to': 'GHS'},
+      queryParameters: {'from': fromCurrency, 'to': toCurrency},
     );
     final rateVal = res['rate'];
     if (rateVal is num) {
       return rateVal.toDouble();
     }
-    return 15.50;
+    return _fallbackRateFor(toCurrency);
   } catch (e) {
-    return 15.50;
+    return _fallbackRateFor(toCurrency);
   }
 });
 
-/// Provides current exchange rate for GHS equivalent conversion, from whichever
-/// currency the user holds their wallet in.
-/// Sourced live from backend / WeWire rates (resolves live, with fallback).
-final walletToGhsRateProvider = Provider<double>((ref) {
+/// Current exchange rate from whichever currency the user holds into the
+/// active destination's currency. Sourced live, with a per-corridor fallback.
+final walletToDestinationRateProvider = Provider<double>((ref) {
   final liveRateAsync = ref.watch(liveExchangeRateProvider);
-  return liveRateAsync.valueOrNull ?? 15.50;
+  final toCurrency = ref.watch(activeDestinationCurrencyProvider) ?? 'GHS';
+  return liveRateAsync.valueOrNull ?? _fallbackRateFor(toCurrency);
 });
 
 /// Provides the live list of wallet balances from GET /api/wallet/balances

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/config/corridors.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../wallet/providers/currency_providers.dart';
@@ -131,6 +132,7 @@ class _PayAnyoneFlowScreenState extends ConsumerState<PayAnyoneFlowScreen> {
       accountNumber: isMoMo ? '' : _accountInput,
       network: payData.network,
       channel: isMoMo ? 'MOBILE_MONEY' : 'BANK',
+      currency: payData.destinationCurrency,
     );
   }
 
@@ -184,7 +186,10 @@ class _PayAnyoneFlowScreenState extends ConsumerState<PayAnyoneFlowScreen> {
 
   /// Infers the network from the number and clears a stale auto-filled name.
   void _onPhoneChanged(String value) {
-    final inferred = inferGhanaNetwork(value);
+    final inferred = inferNetworkFromPhone(
+      value,
+      ref.read(payFlowProvider).destinationCurrency,
+    );
 
     setState(() {
       _phoneInput = value;
@@ -315,6 +320,7 @@ class _PayAnyoneFlowScreenState extends ConsumerState<PayAnyoneFlowScreen> {
     final estimate = PaymentEstimate.local(
       destinationAmount: _enteredAmount,
       exchangeRate: payData.exchangeRate,
+      destinationCurrency: payData.destinationCurrency,
     );
     final balance = ref
         .watch(primaryWalletBalanceProvider)
@@ -432,11 +438,17 @@ class _PayAnyoneFlowScreenState extends ConsumerState<PayAnyoneFlowScreen> {
                           _buildDestinationPill(payData),
                           const SizedBox(height: 16),
 
-                          PaymentMethodSelector(
-                            selected: payData.paymentType,
-                            onChanged: _onPaymentTypeChanged,
-                          ),
-                          const SizedBox(height: 20),
+                          // A corridor with one way to be paid has nothing to
+                          // choose between: Nigeria is bank-only, so offering
+                          // a Mobile Money tab there would be a dead end.
+                          if (!corridorFor(payData.destinationCurrency)
+                              .isSingleChannel) ...[
+                            PaymentMethodSelector(
+                              selected: payData.paymentType,
+                              onChanged: _onPaymentTypeChanged,
+                            ),
+                            const SizedBox(height: 20),
+                          ],
 
                           RecentRecipientsRow(
                             selectedPhone: _phoneInput,
@@ -534,7 +546,7 @@ class _PayAnyoneFlowScreenState extends ConsumerState<PayAnyoneFlowScreen> {
           }
           final cleaned = value.replaceAll(RegExp(r'\s+'), '');
           if (cleaned.length < 9) {
-            return 'Please enter a valid Ghana phone number (min 9 digits)';
+            return 'Please enter a valid ${corridorFor(payData.destinationCurrency).name} phone number (min 9 digits)';
           }
           return null;
         },
@@ -550,23 +562,36 @@ class _PayAnyoneFlowScreenState extends ConsumerState<PayAnyoneFlowScreen> {
         ref
             .watch(payoutBanksProvider(payData.destinationCurrency))
             .valueOrNull ??
-        kFallbackGhanaBanks;
+        fallbackBanksFor(payData.destinationCurrency);
+    final corridor = corridorFor(payData.destinationCurrency);
     final nameResolution = ref.watch(
       recipientNameProvider(_recipientLookup(payData)),
     );
+
+    // Nigeria's list runs to 422 institutions, so the wallets people actually
+    // reach for are pinned above the alphabetical banks.
+    final pinned = banks.where(isPinnedWallet).toList();
+    final rest = banks.where((b) => !isPinnedWallet(b)).toList();
 
     return [
       NetworkSelectorField(
         label: 'Destination Bank',
         value: payData.network,
-        options: banks.map(NetworkOption.fromInstitution).toList(),
+        options: [...pinned, ...rest].map(NetworkOption.fromInstitution).toList(),
         onChanged: _onNetworkChanged,
+        pinnedCount: pinned.length,
+        pinnedLabel: 'Wallets',
+        // A dropdown is fine for Ghana's 28 entries and unusable for Nigeria's
+        // 422, so the picker becomes searchable once the list gets long.
+        searchable: banks.length > 30,
       ),
       const SizedBox(height: 16),
       VessPayTextField(
         fieldKey: const Key('pay_account_number_field'),
         label: 'Account Number',
-        hintText: 'e.g. 1029384756123',
+        hintText: corridor.accountMinDigits == corridor.accountMaxDigits
+            ? 'e.g. 8012345678'
+            : 'e.g. 1029384756123',
         controller: _accountController,
         keyboardType: TextInputType.number,
         onChanged: _onAccountNumberChanged,
@@ -574,8 +599,9 @@ class _PayAnyoneFlowScreenState extends ConsumerState<PayAnyoneFlowScreen> {
           if (value == null || value.trim().isEmpty) {
             return 'Please enter account number';
           }
-          if (normalizeBankAccountNumber(value) == null) {
-            return 'Please enter a valid account number (8-20 digits)';
+          if (normalizeBankAccountNumber(value, payData.destinationCurrency) ==
+              null) {
+            return 'Please enter a valid ${corridor.name} account number (${corridor.accountRuleText})';
           }
           return null;
         },
@@ -594,7 +620,7 @@ class _PayAnyoneFlowScreenState extends ConsumerState<PayAnyoneFlowScreen> {
           Text(payData.countryFlag, style: const TextStyle(fontSize: 16)),
           const SizedBox(width: 4),
           Text(
-            payData.countryCode == 'NG' ? '+234' : '+233',
+            corridorFor(payData.countryCode).dialCode,
             style: GoogleFonts.inter(
               fontSize: 13,
               fontWeight: FontWeight.w600,

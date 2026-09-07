@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/config/corridors.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../models/destination_model.dart';
@@ -205,12 +206,22 @@ class _DestinationSelectionScreenState
                           'destination_card_${destination.country.toLowerCase()}'),
                       destination: destination,
                       isSelected: isSelected,
-                      onTap: () {
-                        setState(() {
-                          _selectedCountry = destination.country;
-                          _errorMessage = null;
-                        });
-                      },
+                      onTap: destination.payoutAvailable
+                          ? () {
+                              setState(() {
+                                _selectedCountry = destination.country;
+                                _errorMessage = null;
+                              });
+                            }
+                          // A corridor with no payout rail stays visible, so
+                          // the roadmap is legible, but cannot be activated.
+                          : () {
+                              setState(() {
+                                _errorMessage =
+                                    '${destination.name} payouts are not live yet. '
+                                    'You can already look up recipients there, but transfers cannot be sent.';
+                              });
+                            },
                     );
                   }).toList(),
                 ),
@@ -259,7 +270,7 @@ class _DestinationSelectionScreenState
                     )
                   : Text(
                       _selectedCountry != null
-                          ? 'Activate ${_selectedCountry == "GH" ? "Ghana" : _selectedCountry == "NG" ? "Nigeria" : _selectedCountry} Travel Mode'
+                          ? 'Activate ${corridorFor(_selectedCountry).name} Travel Mode'
                           : 'Select a Destination',
                       style: GoogleFonts.inter(
                         fontSize: 15,
@@ -370,6 +381,9 @@ class _DestinationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isGhana = destination.country.toUpperCase() == 'GH';
+    // A corridor whose payout rail is not live is shown, but muted and
+    // unselectable -- the destination exists, the transfer does not.
+    final available = destination.payoutAvailable;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -381,6 +395,12 @@ class _DestinationCard extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             padding: const EdgeInsets.all(18),
+            foregroundDecoration: available
+                ? null
+                : BoxDecoration(
+                    color: AppColors.canvas.withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
             decoration: BoxDecoration(
               color: isSelected
                   ? AppColors.surfaceCard
@@ -490,6 +510,29 @@ class _DestinationCard extends StatelessWidget {
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
                                 color: AppColors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (!available) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          key: Key(
+                              'destination_unavailable_${destination.country.toLowerCase()}'),
+                          children: [
+                            const Icon(
+                              Icons.schedule_rounded,
+                              size: 14,
+                              color: AppColors.muted,
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              'Payouts coming soon',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.muted,
                               ),
                             ),
                           ],

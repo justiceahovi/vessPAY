@@ -82,8 +82,8 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
     // Subscribe so the whole screen re-renders in the user's chosen currency
     // once it resolves; the helper builders read it through _currency.
     ref.watch(activeWalletCurrencyProvider);
-    final ghsRate = ref.watch(walletToGhsRateProvider);
-    final ghsEquivalent = _currentAmount * ghsRate;
+    final destinationRate = ref.watch(walletToDestinationRateProvider);
+    final destinationEquivalent = _currentAmount * destinationRate;
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
@@ -136,7 +136,7 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
                   if (topupState.step == TopupStep.enterAmount ||
                       topupState.step == TopupStep.initiating) ...[
                     _buildAmountEntrySection(
-                      ghsEquivalent,
+                      destinationEquivalent,
                       topupState.step == TopupStep.initiating,
                     ),
                   ] else if (topupState.step ==
@@ -156,7 +156,7 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
     );
   }
 
-  Widget _buildAmountEntrySection(double ghsEquivalent, bool isInitiating) {
+  Widget _buildAmountEntrySection(double destinationEquivalent, bool isInitiating) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -262,7 +262,7 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
                   const Text('🇬🇭', style: TextStyle(fontSize: 14)),
                   const SizedBox(width: 8),
                   Text(
-                    '≈ GH₵ ${ghsEquivalent.toStringAsFixed(2)} local spending power',
+                    '≈ GH₵ ${destinationEquivalent.toStringAsFixed(2)} local spending power',
                     key: const Key('add_money_ghs_equivalent_text'),
                     style: GoogleFonts.jetBrainsMono(
                       fontSize: 13,

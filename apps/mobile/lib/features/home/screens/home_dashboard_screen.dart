@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/config/corridors.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/navigation/main_app_bar.dart';
 import '../../../core/routing/app_routes.dart';
@@ -41,6 +42,11 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     WalletCurrencyModel walletCurrency,
   ) {
     HapticFeedback.lightImpact();
+    // The rate is quoted into wherever the user is travelling, so the sheet
+    // names that corridor rather than assuming Ghana.
+    final corridor = corridorFor(
+      ref.read(currentTravelProfileProvider).valueOrNull?.destinationCountry,
+    );
     showModalBottomSheet(
       context: context,
       useRootNavigator: true,
@@ -88,7 +94,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   child: Row(
                     children: [
                       Text(
-                        '${walletCurrency.flag} ➔ 🇬🇭',
+                        '${walletCurrency.flag} ➔ ${corridor.flagEmoji}',
                         style: const TextStyle(fontSize: 20),
                       ),
                       const SizedBox(width: 14),
@@ -97,7 +103,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '${walletCurrency.code} to Ghanaian Cedi',
+                              '${walletCurrency.code} to ${corridor.currency}',
                               style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
@@ -106,7 +112,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '1 ${walletCurrency.code} = GH₵ ${rate.toStringAsFixed(2)}',
+                              '1 ${walletCurrency.code} = ${corridor.symbol} ${rate.toStringAsFixed(2)}',
                               style: GoogleFonts.jetBrainsMono(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -165,11 +171,13 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final balancesAsync = ref.watch(walletBalancesProvider);
-    final ghsRate = ref.watch(walletToGhsRateProvider);
+    final destinationRate = ref.watch(walletToDestinationRateProvider);
     final walletCurrency = ref.watch(activeWalletCurrencyProvider);
     final travelProfile = ref.watch(currentTravelProfileProvider).valueOrNull;
 
     final flagEmoji = travelProfile?.flagEmoji ?? '🇬🇭';
+    // Symbol comes from the corridor table, not from inspecting the flag emoji.
+    final currencySymbol = corridorFor(travelProfile?.destinationCountry).symbol;
 
     return Scaffold(
       key: const Key('home_screen'),
@@ -199,8 +207,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                     context: context,
                     flagEmoji: flagEmoji,
                     balancesAsync: balancesAsync,
-                    ghsRate: ghsRate,
+                    destinationRate: destinationRate,
                     walletCurrency: walletCurrency,
+                    currencySymbol: currencySymbol,
                   ),
 
                   Padding(
@@ -230,8 +239,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     required BuildContext context,
     required String flagEmoji,
     required AsyncValue<List<WalletBalanceModel>> balancesAsync,
-    required double ghsRate,
+    required double destinationRate,
     required WalletCurrencyModel walletCurrency,
+    required String currencySymbol,
   }) {
     return Container(
       color: AppColors.canvas,
@@ -253,16 +263,14 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               );
 
               final walletAmount = primaryBalance.balance;
-              final ghsAmount = walletAmount * ghsRate;
-
-              final currencySymbol = flagEmoji.contains('🇳🇬') ? '₦' : 'GH₵';
+              final destinationAmount = walletAmount * destinationRate;
 
               return _buildSavingsAccountCard(
                 context: context,
                 walletCurrency: walletCurrency,
                 walletAmount: walletAmount,
-                ghsAmount: ghsAmount,
-                rate: ghsRate,
+                destinationAmount: destinationAmount,
+                rate: destinationRate,
                 flagEmoji: flagEmoji,
                 currencySymbol: currencySymbol,
               );
@@ -279,11 +287,11 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
   Widget _buildSavingsAccountCard({
     required BuildContext context,
     required WalletCurrencyModel walletCurrency,
+    required String currencySymbol,
     required double walletAmount,
-    required double ghsAmount,
+    required double destinationAmount,
     required double rate,
     required String flagEmoji,
-    String currencySymbol = 'GH₵',
   }) {
     return Material(
       color: Colors.transparent,
@@ -431,7 +439,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                                   Text(
                                     _hideBalance
                                         ? '≈ $currencySymbol ••••••••'
-                                        : '≈ $currencySymbol ${ghsAmount.toStringAsFixed(2)}',
+                                        : '≈ $currencySymbol ${destinationAmount.toStringAsFixed(2)}',
                                     key: const Key(
                                       'wallet_ghs_equivalent_text',
                                     ),
