@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/navigation/main_app_bar.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../pay/models/transaction_model.dart';
 import '../../pay/providers/recent_activity_provider.dart';
 import '../../travel/providers/travel_providers.dart';
@@ -112,7 +113,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '1 ${walletCurrency.code} = ${corridor.symbol} ${rate.toStringAsFixed(2)}',
+                              '1 ${walletCurrency.code} = ${corridor.symbol} ${formatAmount(rate)}',
                               style: GoogleFonts.jetBrainsMono(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -439,7 +440,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                                   Text(
                                     _hideBalance
                                         ? '≈ $currencySymbol ••••••••'
-                                        : '≈ $currencySymbol ${destinationAmount.toStringAsFixed(2)}',
+                                        : '≈ $currencySymbol ${formatAmount(destinationAmount)}',
                                     key: const Key(
                                       'wallet_ghs_equivalent_text',
                                     ),
@@ -451,7 +452,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    'Exchange reference: ${walletCurrency.format(1)} = $currencySymbol${rate.toStringAsFixed(2)}',
+                                    'Exchange reference: ${walletCurrency.format(1)} = $currencySymbol${formatAmount(rate)}',
                                     style: GoogleFonts.jetBrainsMono(
                                       fontSize: 11,
                                       color: AppColors.onDarkSoft,

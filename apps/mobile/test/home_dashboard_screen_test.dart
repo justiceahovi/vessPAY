@@ -208,7 +208,7 @@ void main() {
 
       // Balance should initially be visible by default
       expect(find.text('\$500.00'), findsOneWidget);
-      expect(find.text('≈ GH₵ 7750.00'), findsOneWidget);
+      expect(find.text('≈ GH₵ 7,750.00'), findsOneWidget);
       expect(find.byIcon(Icons.visibility_outlined), findsOneWidget);
 
       // Tap eye icon to hide balance
@@ -224,7 +224,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('\$500.00'), findsOneWidget);
-      expect(find.text('≈ GH₵ 7750.00'), findsOneWidget);
+      expect(find.text('≈ GH₵ 7,750.00'), findsOneWidget);
     });
 
     testWidgets('Renders "Hello..." fallback when user has no name',

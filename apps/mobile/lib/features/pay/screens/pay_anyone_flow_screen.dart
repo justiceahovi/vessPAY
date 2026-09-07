@@ -6,12 +6,12 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/config/corridors.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../wallet/providers/currency_providers.dart';
 import '../../../core/widgets/vesspay_text_field.dart';
 import '../../kyc/widgets/kyc_gate.dart';
 import '../../travel/models/travel_profile_model.dart';
 import '../../travel/providers/travel_providers.dart';
-import '../../travel/screens/destination_selection_screen.dart';
 import '../../wallet/providers/wallet_providers.dart';
 import '../models/pay_flow_model.dart';
 import '../models/payment_estimate.dart';
@@ -84,7 +84,8 @@ class _PayAnyoneFlowScreenState extends ConsumerState<PayAnyoneFlowScreen> {
       _accountController.text = payData.accountNumber;
     }
     if (payData.destinationAmount > 0) {
-      _amountController.text = payData.destinationAmount.toStringAsFixed(0);
+      _amountController.text =
+          formatAmount(payData.destinationAmount, trimZeroDecimals: true);
     }
   }
 
@@ -267,7 +268,7 @@ class _PayAnyoneFlowScreenState extends ConsumerState<PayAnyoneFlowScreen> {
   }
 
   double get _enteredAmount =>
-      double.tryParse(_amountController.text.trim()) ?? 0.0;
+      double.tryParse(_amountController.text.replaceAll(',', '').trim()) ?? 0.0;
 
   void _onSubmit(
     PaymentEstimate estimate,
@@ -382,18 +383,9 @@ class _PayAnyoneFlowScreenState extends ConsumerState<PayAnyoneFlowScreen> {
         centerTitle: true,
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: TextButton(
-              key: const Key('pay_flow_cancel_button'),
-              onPressed: _close,
-              child: Text(
-                'Cancel',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.muted,
-                ),
-              ),
+            padding: const EdgeInsets.only(right: 16),
+            child: Center(
+              child: _buildCountryFlagBadge(payData),
             ),
           ),
         ],
@@ -433,10 +425,7 @@ class _PayAnyoneFlowScreenState extends ConsumerState<PayAnyoneFlowScreen> {
                               height: 1.4,
                             ),
                           ),
-                          const SizedBox(height: 16),
-
-                          _buildDestinationPill(payData),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 20),
 
                           // A corridor with one way to be paid has nothing to
                           // choose between: Nigeria is bank-only, so offering
@@ -530,6 +519,7 @@ class _PayAnyoneFlowScreenState extends ConsumerState<PayAnyoneFlowScreen> {
         options: kGhanaMoMoOptions,
         onChanged: _onNetworkChanged,
         autoDetected: autoDetected,
+        searchable: true,
       ),
       const SizedBox(height: 16),
       VessPayTextField(
@@ -581,9 +571,7 @@ class _PayAnyoneFlowScreenState extends ConsumerState<PayAnyoneFlowScreen> {
         onChanged: _onNetworkChanged,
         pinnedCount: pinned.length,
         pinnedLabel: 'Wallets',
-        // A dropdown is fine for Ghana's 28 entries and unusable for Nigeria's
-        // 422, so the picker becomes searchable once the list gets long.
-        searchable: banks.length > 30,
+        searchable: true,
       ),
       const SizedBox(height: 16),
       VessPayTextField(
@@ -936,41 +924,21 @@ class _PayAnyoneFlowScreenState extends ConsumerState<PayAnyoneFlowScreen> {
   // ------------------------------------------------------------
   // Chrome
   // ------------------------------------------------------------
-  Widget _buildDestinationPill(PayFlowData payData) {
+  Widget _buildCountryFlagBadge(PayFlowData payData) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      key: const Key('pay_determined_country_badge'),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: AppColors.surfaceSoft,
         borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: AppColors.hairlineSubtle),
+        border: Border.all(
+          color: AppColors.hairlineSubtle,
+          width: 1.0,
+        ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(payData.countryFlag, style: const TextStyle(fontSize: 14)),
-          const SizedBox(width: 6),
-          Text(
-            'Destination: ${payData.countryName}',
-            key: const Key('pay_determined_country_badge'),
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.ink,
-            ),
-          ),
-          const SizedBox(width: 8),
-          InkWell(
-            onTap: () => DestinationSelectionScreen.showAsBottomSheet(context),
-            child: Text(
-              'Change',
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.primary,
-              ),
-            ),
-          ),
-        ],
+      child: Text(
+        payData.countryFlag,
+        style: const TextStyle(fontSize: 16),
       ),
     );
   }

@@ -334,7 +334,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // The quote itself is fully rendered, in Naira.
-      expect(find.text('₦50000.00'), findsWidgets);
+      expect(find.text('₦50,000.00'), findsWidgets);
       expect(find.text('Stone 1206'), findsOneWidget);
 
       // The gate sits on confirmation, and explains itself.

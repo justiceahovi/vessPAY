@@ -1,3 +1,5 @@
+import '../../../core/utils/currency_formatter.dart';
+
 class WalletBalanceModel {
   final String currency;
   final double balance;
@@ -16,5 +18,5 @@ class WalletBalanceModel {
     );
   }
 
-  String get formattedBalance => '\$${balance.toStringAsFixed(2)}';
+  String get formattedBalance => '\$${formatAmount(balance)}';
 }

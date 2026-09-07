@@ -74,8 +74,7 @@ class NetworkSelectorField extends StatelessWidget {
   final int pinnedCount;
   final String pinnedLabel;
 
-  /// Swaps the dropdown for a searchable sheet. A dropdown is comfortable for
-  /// Ghana's 28 institutions and unusable for Nigeria's 422.
+  /// Swaps the dropdown for a searchable sheet. Defaults to true.
   final bool searchable;
 
   const NetworkSelectorField({
@@ -87,7 +86,7 @@ class NetworkSelectorField extends StatelessWidget {
     this.autoDetected = false,
     this.pinnedCount = 0,
     this.pinnedLabel = '',
-    this.searchable = false,
+    this.searchable = true,
   });
 
   @override
@@ -143,6 +142,7 @@ class NetworkSelectorField extends StatelessWidget {
         const SizedBox(height: 6),
         if (searchable)
           _SearchableNetworkField(
+            label: label,
             selected: selected,
             options: options,
             pinnedCount: pinnedCount,
@@ -150,43 +150,43 @@ class NetworkSelectorField extends StatelessWidget {
             onChanged: onChanged,
           )
         else
-        DropdownButtonFormField<String>(
-          key: const Key('pay_network_dropdown'),
-          initialValue: selected,
-          isExpanded: true,
-          dropdownColor: AppColors.surfaceCard,
-          borderRadius: BorderRadius.circular(12),
-          icon: const Icon(
-            Icons.keyboard_arrow_down_rounded,
-            color: AppColors.muted,
-            size: 22,
+          DropdownButtonFormField<String>(
+            key: const Key('pay_network_dropdown'),
+            initialValue: selected,
+            isExpanded: true,
+            dropdownColor: AppColors.surfaceCard,
+            borderRadius: BorderRadius.circular(12),
+            icon: const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: AppColors.muted,
+              size: 22,
+            ),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: AppColors.surfaceCard,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              border: _border(AppColors.hairline, 1),
+              enabledBorder: _border(AppColors.hairline, 1),
+              focusedBorder: _border(AppColors.primary, 1.5),
+            ),
+            selectedItemBuilder: (context) =>
+                options.map((option) => _OptionRow(option: option)).toList(),
+            items: options
+                .map(
+                  (option) => DropdownMenuItem<String>(
+                    key: option.itemKey,
+                    value: option.value,
+                    child: _OptionRow(option: option),
+                  ),
+                )
+                .toList(),
+            onChanged: (val) {
+              if (val == null) return;
+              HapticFeedback.selectionClick();
+              onChanged(val);
+            },
           ),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: AppColors.surfaceCard,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            border: _border(AppColors.hairline, 1),
-            enabledBorder: _border(AppColors.hairline, 1),
-            focusedBorder: _border(AppColors.primary, 1.5),
-          ),
-          selectedItemBuilder: (context) =>
-              options.map((option) => _OptionRow(option: option)).toList(),
-          items: options
-              .map(
-                (option) => DropdownMenuItem<String>(
-                  key: option.itemKey,
-                  value: option.value,
-                  child: _OptionRow(option: option),
-                ),
-              )
-              .toList(),
-          onChanged: (val) {
-            if (val == null) return;
-            HapticFeedback.selectionClick();
-            onChanged(val);
-          },
-        ),
       ],
     );
   }
@@ -199,12 +199,10 @@ class NetworkSelectorField extends StatelessWidget {
 
 /// The searchable variant: a tappable field that opens a filterable sheet.
 ///
-/// Nigeria's institution list is 422 entries long, which a dropdown cannot
-/// present usefully. The wallets people actually reach for (OPay, PalmPay,
-/// Moniepoint, Kuda, Paga) are pinned above the alphabetical banks, and typing
-/// filters on both the institution name and its code, so someone who knows the
-/// NIP code can enter it directly.
+/// Filters on both the institution name and its code / sort code / badge, so
+/// someone who knows the code can enter it directly.
 class _SearchableNetworkField extends StatelessWidget {
+  final String label;
   final String selected;
   final List<NetworkOption> options;
   final int pinnedCount;
@@ -212,6 +210,7 @@ class _SearchableNetworkField extends StatelessWidget {
   final ValueChanged<String> onChanged;
 
   const _SearchableNetworkField({
+    required this.label,
     required this.selected,
     required this.options,
     required this.pinnedCount,
@@ -233,6 +232,7 @@ class _SearchableNetworkField extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _NetworkPickerSheet(
+        label: label,
         options: options,
         selected: selected,
         pinnedCount: pinnedCount,
@@ -248,35 +248,39 @@ class _SearchableNetworkField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final option = _selectedOption;
+    final isBank = label.toLowerCase().contains('bank');
 
     return InkWell(
-      key: const Key('pay_network_search_field'),
+      key: const Key('pay_network_dropdown'),
       borderRadius: BorderRadius.circular(10),
       onTap: () => _openPicker(context),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          filled: true,
-          fillColor: AppColors.surfaceCard,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          border: _fieldBorder(AppColors.hairline, 1),
-          enabledBorder: _fieldBorder(AppColors.hairline, 1),
-          focusedBorder: _fieldBorder(AppColors.primary, 1.5),
-          suffixIcon: const Icon(
-            Icons.search_rounded,
-            color: AppColors.muted,
-            size: 20,
+      child: Container(
+        key: const Key('pay_network_search_field'),
+        child: InputDecorator(
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: AppColors.surfaceCard,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            border: _fieldBorder(AppColors.hairline, 1),
+            enabledBorder: _fieldBorder(AppColors.hairline, 1),
+            focusedBorder: _fieldBorder(AppColors.primary, 1.5),
+            suffixIcon: const Icon(
+              Icons.search_rounded,
+              color: AppColors.muted,
+              size: 20,
+            ),
           ),
+          child: option == null
+              ? Text(
+                  isBank ? 'Select a bank' : 'Select a network',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: AppColors.muted,
+                  ),
+                )
+              : _OptionRow(option: option),
         ),
-        child: option == null
-            ? Text(
-                'Select a bank',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  color: AppColors.muted,
-                ),
-              )
-            : _OptionRow(option: option),
       ),
     );
   }
@@ -289,12 +293,14 @@ OutlineInputBorder _fieldBorder(Color color, double width) =>
     );
 
 class _NetworkPickerSheet extends StatefulWidget {
+  final String label;
   final List<NetworkOption> options;
   final String selected;
   final int pinnedCount;
   final String pinnedLabel;
 
   const _NetworkPickerSheet({
+    required this.label,
     required this.options,
     required this.selected,
     required this.pinnedCount,
@@ -312,17 +318,22 @@ class _NetworkPickerSheetState extends State<_NetworkPickerSheet> {
     if (_query.isEmpty) return true;
     final q = _query.toLowerCase();
     return o.displayName.toLowerCase().contains(q) ||
-        o.value.toLowerCase().contains(q);
+        o.value.toLowerCase().contains(q) ||
+        o.badge.toLowerCase().contains(q);
   }
 
   @override
   Widget build(BuildContext context) {
+    final isBank = widget.label.toLowerCase().contains('bank');
     final pinned = widget.options
         .take(widget.pinnedCount)
         .where(_matches)
         .toList();
     final rest =
         widget.options.skip(widget.pinnedCount).where(_matches).toList();
+    final allLabel = pinned.isNotEmpty
+        ? (isBank ? 'All banks' : 'Other networks')
+        : (isBank ? 'All banks' : 'Networks');
 
     return Container(
       constraints: BoxConstraints(
@@ -354,7 +365,7 @@ class _NetworkPickerSheetState extends State<_NetworkPickerSheet> {
               autofocus: true,
               onChanged: (v) => setState(() => _query = v.trim()),
               decoration: InputDecoration(
-                hintText: 'Search bank or code',
+                hintText: isBank ? 'Search bank or code' : 'Search network or code',
                 prefixIcon: const Icon(Icons.search_rounded,
                     color: AppColors.muted, size: 20),
                 filled: true,
@@ -371,11 +382,15 @@ class _NetworkPickerSheetState extends State<_NetworkPickerSheet> {
             child: (pinned.isEmpty && rest.isEmpty)
                 ? Padding(
                     padding: const EdgeInsets.symmetric(vertical: 32),
-                    child: Text(
-                      'No bank matches "$_query"',
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        color: AppColors.muted,
+                    child: Center(
+                      child: Text(
+                        isBank
+                            ? 'No bank matches "$_query"'
+                            : 'No network matches "$_query"',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: AppColors.muted,
+                        ),
                       ),
                     ),
                   )
@@ -388,7 +403,7 @@ class _NetworkPickerSheetState extends State<_NetworkPickerSheet> {
                         ...pinned.map(_tile),
                       ],
                       if (rest.isNotEmpty) ...[
-                        if (pinned.isNotEmpty) _sectionHeader('All banks'),
+                        _sectionHeader(allLabel),
                         ...rest.map(_tile),
                       ],
                     ],
@@ -418,10 +433,12 @@ class _NetworkPickerSheetState extends State<_NetworkPickerSheet> {
       key: option.itemKey,
       dense: true,
       title: _OptionRow(option: option),
-      subtitle: Text(
-        option.value,
-        style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.muted),
-      ),
+      subtitle: (option.badge.isEmpty && option.value.isNotEmpty)
+          ? Text(
+              option.value,
+              style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.muted),
+            )
+          : null,
       trailing: isSelected
           ? const Icon(Icons.check_rounded,
               color: AppColors.primary, size: 20)

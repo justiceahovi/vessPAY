@@ -186,14 +186,14 @@ void main() {
 
       // Default amount is 100.00 -> 100 * 15.50 = 1550.00
       expect(find.byKey(const Key('add_money_ghs_equivalent_text')), findsOneWidget);
-      expect(find.textContaining('GH₵ 1550.00'), findsOneWidget);
+      expect(find.textContaining('GH₵ 1,550.00'), findsOneWidget);
 
       // Tap +$250 chip
       await tester.tap(find.text('+\$250'));
       await tester.pumpAndSettle();
 
       // 250 * 15.50 = 3875.00
-      expect(find.textContaining('GH₵ 3875.00'), findsOneWidget);
+      expect(find.textContaining('GH₵ 3,875.00'), findsOneWidget);
       expect(find.text('Continue to Funding (\$250.00)'), findsOneWidget);
     });
 

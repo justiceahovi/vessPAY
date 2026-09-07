@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/navigation/main_app_bar.dart';
 import '../../../../core/routing/app_routes.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/currency_formatter.dart';
 import '../models/transaction_model.dart';
 import '../providers/recent_activity_provider.dart';
 
@@ -252,10 +253,10 @@ class TransactionListScreen extends ConsumerWidget {
     final String usdSubtext;
     if (tx.isDeposit) {
       usdSubtext = tx.fee > 0
-          ? 'Fee ${tx.sourceCurrency} ${tx.fee.toStringAsFixed(2)}'
+          ? 'Fee ${tx.sourceCurrency} ${formatAmount(tx.fee)}'
           : '';
     } else {
-      usdSubtext = '\$${(tx.sourceAmount + tx.fee).toStringAsFixed(2)} USD';
+      usdSubtext = '\$${formatAmount(tx.sourceAmount + tx.fee)} USD';
     }
 
     return InkWell(

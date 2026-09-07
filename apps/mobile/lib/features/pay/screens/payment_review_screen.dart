@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/config/corridors.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../travel/providers/travel_providers.dart';
 import '../../wallet/models/wallet_currency_model.dart';
 import '../models/pay_flow_model.dart';
@@ -321,7 +322,7 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                '$destCurrencySymbol${destAmount.toStringAsFixed(2)}',
+                                '$destCurrencySymbol${formatAmount(destAmount)}',
                                 key: const Key('review_recipient_gets_header'),
                                 style: const TextStyle(
                                   fontFamily: 'Copernicus',
@@ -366,7 +367,7 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            'Exchange Rate: 1 ${sourceCurrency.code} = $destCurrencySymbol${rate.toStringAsFixed(2)} ${quote.destinationCurrency}',
+                            'Exchange Rate: 1 ${sourceCurrency.code} = $destCurrencySymbol${formatAmount(rate)} ${quote.destinationCurrency}',
                             key: const Key('review_exchange_rate_chip'),
                             style: const TextStyle(
                               fontFamily: 'StyreneB',
@@ -471,13 +472,13 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
                   children: [
                     _buildDetailRow(
                       label: 'Recipient Receives',
-                      value: '$destCurrencySymbol${destAmount.toStringAsFixed(2)}',
+                      value: '$destCurrencySymbol${formatAmount(destAmount)}',
                       valueKey: const Key('review_destination_amount'),
                     ),
                     const SizedBox(height: 10),
                     _buildDetailRow(
                       label: 'Exchange Rate',
-                      value: '1 ${sourceCurrency.code} = $destCurrencySymbol${rate.toStringAsFixed(2)}',
+                      value: '1 ${sourceCurrency.code} = $destCurrencySymbol${formatAmount(rate)}',
                       valueKey: const Key('review_exchange_rate'),
                     ),
                     const SizedBox(height: 10),

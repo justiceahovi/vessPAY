@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/currency_formatter.dart';
 
 /// Hero amount input plus quick preset chips, in the recipient's currency.
 class AmountEntryCard extends StatelessWidget {
@@ -71,6 +72,9 @@ class AmountEntryCard extends StatelessWidget {
                       focusNode: focusNode,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [
+                        ThousandsSeparatorInputFormatter(),
+                      ],
                       style: GoogleFonts.inter(
                         fontSize: 32,
                         fontWeight: FontWeight.w700,
@@ -87,13 +91,16 @@ class AmountEntryCard extends StatelessWidget {
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.zero,
                       ),
-                      onChanged: (val) =>
-                          onAmountChanged(double.tryParse(val.trim()) ?? 0.0),
+                      onChanged: (val) {
+                        final clean = val.replaceAll(',', '').trim();
+                        onAmountChanged(double.tryParse(clean) ?? 0.0);
+                      },
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
                           return 'Please enter an amount';
                         }
-                        final parsed = double.tryParse(value.trim());
+                        final clean = value.replaceAll(',', '').trim();
+                        final parsed = double.tryParse(clean);
                         if (parsed == null || parsed <= 0) {
                           return 'Please enter a valid amount greater than 0';
                         }
@@ -111,14 +118,16 @@ class AmountEntryCard extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: presets.map((amount) {
-            final isSelected = controller.text.trim() == amount.toString();
+            final cleanText = controller.text.replaceAll(',', '').trim();
+            final isSelected = cleanText == amount.toString() ||
+                double.tryParse(cleanText) == amount.toDouble();
 
             return InkWell(
               key: Key('pay_chip_$amount'),
               borderRadius: BorderRadius.circular(100),
               onTap: () {
                 HapticFeedback.selectionClick();
-                controller.text = amount.toString();
+                controller.text = formatAmount(amount, trimZeroDecimals: true);
                 onAmountChanged(amount.toDouble());
               },
               child: AnimatedContainer(
@@ -146,7 +155,7 @@ class AmountEntryCard extends StatelessWidget {
                       : null,
                 ),
                 child: Text(
-                  '$currencySymbol$amount',
+                  '$currencySymbol${formatAmount(amount, trimZeroDecimals: true)}',
                   style: GoogleFonts.inter(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,

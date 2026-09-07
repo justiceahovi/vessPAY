@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../wallet/models/wallet_currency_model.dart';
 import '../models/payment_estimate.dart';
 
@@ -78,7 +79,7 @@ class PaymentEstimateCard extends StatelessWidget {
                     ],
                   ),
                   Text(
-                    '1 ${walletCurrency.code} = $currencySymbol${estimate.exchangeRate.toStringAsFixed(2)}',
+                    '1 ${walletCurrency.code} = $currencySymbol${formatAmount(estimate.exchangeRate)}',
                     key: const Key('pay_live_rate_text'),
                     style: GoogleFonts.inter(
                       fontSize: 12.5,

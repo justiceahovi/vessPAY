@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/currency_formatter.dart';
 
 /// Transaction Model representing an individual payment or funding activity
 class TransactionModel {
@@ -180,7 +181,7 @@ class TransactionModel {
     if (isDeposit) {
       switch (status.toUpperCase()) {
         case 'FAILED':
-          return 'Deposit of $sourceCurrency ${sourceAmount.toStringAsFixed(2)} did not go through';
+          return 'Deposit of $sourceCurrency ${formatAmount(sourceAmount)} did not go through';
         case 'COMPLETED':
           return 'Credited to your $destinationCurrency wallet';
         default:
@@ -190,12 +191,12 @@ class TransactionModel {
     if (recipientPhone != null && recipientPhone!.isNotEmpty) {
       return '${network ?? "MoMo"} payout to $recipientPhone';
     }
-    return 'You have successfully purchased airtime of $destinationCurrency ${destinationAmount.toStringAsFixed(2)}';
+    return 'You have successfully purchased airtime of $destinationCurrency ${formatAmount(destinationAmount)}';
   }
 
   /// Presentation amount
   String get displayAmount {
-    return '$destinationCurrency ${destinationAmount.toStringAsFixed(2)}';
+    return '$destinationCurrency ${formatAmount(destinationAmount)}';
   }
 
   /// Presentation amount signed by direction: a deposit adds to the wallet,

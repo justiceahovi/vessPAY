@@ -369,7 +369,13 @@ void main() {
       // Country is already determined from onboarding (Ghana by default)
       expect(
           find.byKey(const Key('pay_determined_country_badge')), findsOneWidget);
-      expect(find.text('Destination: Ghana'), findsOneWidget);
+      expect(
+          find.descendant(
+            of: find.byKey(const Key('pay_determined_country_badge')),
+            matching: find.text('🇬🇭'),
+          ),
+          findsOneWidget);
+      expect(find.text('Cancel'), findsNothing);
 
       // Payment method is a compact control, not its own step
       expect(find.byKey(const Key('pay_type_mobile_money')), findsOneWidget);
@@ -1068,4 +1074,78 @@ void main() {
       expect(PaymentQuoteRequest.fromPayData(complete).isComplete, isTrue);
     });
   });
+
+  group('Ghana searchable institution picker', () {
+    testWidgets('Ghana MoMo opens searchable sheet and filters by query',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      // Tap the network dropdown
+      await tester.tap(find.byKey(const Key('pay_network_dropdown')));
+      await tester.pumpAndSettle();
+
+      // Search sheet appears with network search hint
+      expect(find.byKey(const Key('pay_network_search_input')), findsOneWidget);
+      expect(find.text('Search network or code'), findsOneWidget);
+      expect(find.text('NETWORKS'), findsOneWidget);
+      expect(find.byKey(const Key('pay_network_mtn')), findsOneWidget);
+      expect(find.byKey(const Key('pay_network_telecel')), findsOneWidget);
+
+      // Filter by "tele"
+      await tester.enterText(
+          find.byKey(const Key('pay_network_search_input')), 'tele');
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('pay_network_telecel')), findsOneWidget);
+      expect(find.byKey(const Key('pay_network_mtn')), findsNothing);
+
+      // Select Telecel
+      await tester.tap(find.byKey(const Key('pay_network_telecel')));
+      await tester.pumpAndSettle();
+
+      // Sheet is dismissed and field shows Telecel Cash
+      expect(find.byKey(const Key('pay_network_search_input')), findsNothing);
+      expect(find.text('Telecel Cash'), findsOneWidget);
+    });
+
+    testWidgets('Ghana Bank opens searchable sheet and filters by code or name',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      // Switch to Bank
+      await tester.tap(find.byKey(const Key('pay_type_bank')));
+      await tester.pumpAndSettle();
+
+      // Tap destination bank field
+      await tester.tap(find.byKey(const Key('pay_network_dropdown')));
+      await tester.pumpAndSettle();
+
+      // Search sheet appears with bank search hint and ALL BANKS header
+      expect(find.byKey(const Key('pay_network_search_input')), findsOneWidget);
+      expect(find.text('Search bank or code'), findsOneWidget);
+      expect(find.text('ALL BANKS'), findsOneWidget);
+      expect(find.byKey(const Key('pay_network_gcb')), findsOneWidget);
+      expect(find.byKey(const Key('pay_network_cal')), findsOneWidget);
+
+      // Filter by code "CAL"
+      await tester.enterText(
+          find.byKey(const Key('pay_network_search_input')), 'cal');
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('pay_network_cal')), findsOneWidget);
+      expect(find.text('CAL'), findsOneWidget);
+      expect(find.byKey(const Key('pay_network_gcb')), findsNothing);
+
+      // Select CAL Bank
+      await tester.tap(find.byKey(const Key('pay_network_cal')));
+      await tester.pumpAndSettle();
+
+      // Sheet is dismissed and field shows CAL Bank Limited
+      expect(find.byKey(const Key('pay_network_search_input')), findsNothing);
+      expect(find.text('CAL Bank Limited'), findsWidgets);
+    });
+  });
 }
+

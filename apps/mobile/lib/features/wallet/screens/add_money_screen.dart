@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../kyc/widgets/kyc_gate.dart';
 import '../../travel/widgets/traveling_in_indicator.dart';
 import '../models/wallet_currency_model.dart';
@@ -43,7 +43,7 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
   }
 
   double get _currentAmount {
-    return double.tryParse(_amountController.text.trim()) ?? 0.0;
+    return double.tryParse(_amountController.text.replaceAll(',', '').trim()) ?? 0.0;
   }
 
   /// The currency the user chose to hold; deposits are denominated in it.
@@ -228,9 +228,7 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
                         decimal: true,
                       ),
                       inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                          RegExp(r'^\d+\.?\d{0,2}'),
-                        ),
+                        ThousandsSeparatorInputFormatter(),
                       ],
                       onChanged: (_) => setState(() {}),
                       style: GoogleFonts.inter(
@@ -262,7 +260,7 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
                   const Text('🇬🇭', style: TextStyle(fontSize: 14)),
                   const SizedBox(width: 8),
                   Text(
-                    '≈ GH₵ ${destinationEquivalent.toStringAsFixed(2)} local spending power',
+                    '≈ GH₵ ${formatAmount(destinationEquivalent)} local spending power',
                     key: const Key('add_money_ghs_equivalent_text'),
                     style: GoogleFonts.jetBrainsMono(
                       fontSize: 13,
@@ -296,7 +294,7 @@ class _AddMoneyScreenState extends ConsumerState<AddMoneyScreen> {
             return InkWell(
               onTap: () {
                 setState(() {
-                  _amountController.text = amt.toStringAsFixed(2);
+                  _amountController.text = formatAmount(amt);
                 });
               },
               borderRadius: BorderRadius.circular(100),

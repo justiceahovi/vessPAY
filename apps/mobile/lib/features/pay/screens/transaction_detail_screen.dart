@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/currency_formatter.dart';
 import '../models/transaction_model.dart';
 import '../providers/recent_activity_provider.dart';
 
@@ -299,8 +300,8 @@ class TransactionDetailScreen extends ConsumerWidget {
           // Primary Amount, signed by direction
           Text(
             tx.isDeposit
-                ? '+ ${tx.destinationCurrency} ${tx.destinationAmount.toStringAsFixed(2)}'
-                : '${tx.destinationCurrency} ${tx.destinationAmount.toStringAsFixed(2)}',
+                ? '+ ${tx.destinationCurrency} ${formatAmount(tx.destinationAmount)}'
+                : '${tx.destinationCurrency} ${formatAmount(tx.destinationAmount)}',
             key: const Key('detail_hero_amount'),
             style: const TextStyle(
               fontFamily: 'Copernicus',
@@ -317,7 +318,7 @@ class TransactionDetailScreen extends ConsumerWidget {
           Text(
             tx.isDeposit
                 ? _depositHeroSubtitle(tx)
-                : '-\$${(tx.sourceAmount + tx.fee + tx.wewireFee).toStringAsFixed(2)} USD total debited',
+                : '-\$${formatAmount(tx.sourceAmount + tx.fee + tx.wewireFee)} USD total debited',
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontFamily: 'StyreneB',
@@ -375,12 +376,12 @@ class TransactionDetailScreen extends ConsumerWidget {
     switch (tx.status.toUpperCase()) {
       case 'COMPLETED':
         return tx.fee > 0
-            ? 'Credited to your ${tx.destinationCurrency} wallet after a ${tx.sourceCurrency} ${tx.fee.toStringAsFixed(2)} fee'
+            ? 'Credited to your ${tx.destinationCurrency} wallet after a ${tx.sourceCurrency} ${formatAmount(tx.fee)} fee'
             : 'Credited to your ${tx.destinationCurrency} wallet';
       case 'FAILED':
         return 'This deposit did not go through';
       default:
-        return 'Waiting for your ${tx.sourceCurrency} ${tx.sourceAmount.toStringAsFixed(2)} transfer to arrive';
+        return 'Waiting for your ${tx.sourceCurrency} ${formatAmount(tx.sourceAmount)} transfer to arrive';
     }
   }
 
@@ -452,12 +453,12 @@ class TransactionDetailScreen extends ConsumerWidget {
           const SizedBox(height: 12),
           _buildRowItem(
             'Amount Sent',
-            '${tx.sourceCurrency} ${sent.toStringAsFixed(2)}',
+            '${tx.sourceCurrency} ${formatAmount(sent)}',
           ),
           const SizedBox(height: 10),
           _buildRowItem(
             'Rails Fee',
-            '${tx.sourceCurrency} ${tx.fee.toStringAsFixed(2)}',
+            '${tx.sourceCurrency} ${formatAmount(tx.fee)}',
           ),
           const SizedBox(height: 10),
           const Divider(height: 16, color: AppColors.hairlineSoft),
@@ -465,7 +466,7 @@ class TransactionDetailScreen extends ConsumerWidget {
             // Until the pay-in settles there is nothing credited yet, so the
             // figure is labelled as the expectation it is.
             settled ? 'Credited to Wallet' : 'Expected in Wallet',
-            '${tx.destinationCurrency} ${credited.toStringAsFixed(2)}',
+            '${tx.destinationCurrency} ${formatAmount(credited)}',
             valueWeight: FontWeight.w700,
             valueColor: AppColors.ink,
             key: const Key('detail_deposit_credited'),
@@ -533,27 +534,27 @@ class TransactionDetailScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 12),
-          _buildRowItem('You Sent (Subtotal)', '\$${tx.sourceAmount.toStringAsFixed(2)} USD'),
+          _buildRowItem('You Sent (Subtotal)', '\$${formatAmount(tx.sourceAmount)} USD'),
           const SizedBox(height: 10),
-          _buildRowItem('VessPay Fee (1%)', '\$${tx.fee.toStringAsFixed(2)} USD'),
+          _buildRowItem('VessPay Fee (1%)', '\$${formatAmount(tx.fee)} USD'),
           if (tx.wewireFee > 0) ...[
             const SizedBox(height: 10),
-            _buildRowItem('Network Fee', '\$${tx.wewireFee.toStringAsFixed(2)} USD'),
+            _buildRowItem('Network Fee', '\$${formatAmount(tx.wewireFee)} USD'),
           ],
           const SizedBox(height: 10),
-          _buildRowItem('Exchange Rate', '1 USD = ${tx.exchangeRate.toStringAsFixed(2)} ${tx.destinationCurrency}'),
+          _buildRowItem('Exchange Rate', '1 USD = ${formatAmount(tx.exchangeRate)} ${tx.destinationCurrency}'),
           const SizedBox(height: 10),
           const Divider(height: 16, color: AppColors.hairlineSoft),
           _buildRowItem(
             'Recipient Received',
-            '${tx.destinationCurrency} ${tx.destinationAmount.toStringAsFixed(2)}',
+            '${tx.destinationCurrency} ${formatAmount(tx.destinationAmount)}',
             valueWeight: FontWeight.w700,
             valueColor: AppColors.ink,
           ),
           const SizedBox(height: 10),
           _buildRowItem(
             'Total Debited',
-            '\$${totalUsd.toStringAsFixed(2)} USD',
+            '\$${formatAmount(totalUsd)} USD',
             valueWeight: FontWeight.w700,
             valueColor: AppColors.ink,
           ),
@@ -721,10 +722,10 @@ Reference: $reference
 Status: ${tx.status}
 Recipient: ${tx.recipientName ?? 'Recipient'} (${tx.recipientPhone ?? ''})
 Network: ${tx.network ?? ''}
-Amount Delivered: ${tx.destinationCurrency} ${tx.destinationAmount.toStringAsFixed(2)}
-Amount Debited: \$${(tx.sourceAmount + tx.fee + tx.wewireFee).toStringAsFixed(2)} USD
-Rate: 1 USD = ${tx.exchangeRate.toStringAsFixed(2)} ${tx.destinationCurrency}
-Fee: \$${tx.fee.toStringAsFixed(2)} USD${tx.wewireFee > 0 ? '\nNetwork Fee: \$${tx.wewireFee.toStringAsFixed(2)} USD' : ''}
+Amount Delivered: ${tx.destinationCurrency} ${formatAmount(tx.destinationAmount)}
+Amount Debited: \$${formatAmount(tx.sourceAmount + tx.fee + tx.wewireFee)} USD
+Rate: 1 USD = ${formatAmount(tx.exchangeRate)} ${tx.destinationCurrency}
+Fee: \$${formatAmount(tx.fee)} USD${tx.wewireFee > 0 ? '\nNetwork Fee: \$${formatAmount(tx.wewireFee)} USD' : ''}
 Date: ${tx.formattedDate}
 ---------------------------
 Sent seamlessly via VessPay
@@ -750,9 +751,9 @@ VessPay Deposit Receipt
 ---------------------------
 Reference: $reference
 Status: ${tx.status}
-Amount Sent: ${tx.sourceCurrency} ${tx.sourceAmount.toStringAsFixed(2)}
-Fee: ${tx.sourceCurrency} ${tx.fee.toStringAsFixed(2)}
-Credited: ${tx.destinationCurrency} ${tx.destinationAmount.toStringAsFixed(2)}
+Amount Sent: ${tx.sourceCurrency} ${formatAmount(tx.sourceAmount)}
+Fee: ${tx.sourceCurrency} ${formatAmount(tx.fee)}
+Credited: ${tx.destinationCurrency} ${formatAmount(tx.destinationAmount)}
 Date: ${tx.formattedDate}
 ---------------------------
 Added seamlessly via VessPay

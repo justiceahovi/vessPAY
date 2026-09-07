@@ -1,3 +1,5 @@
+import '../../../core/utils/currency_formatter.dart';
+
 /// A currency the user can hold and deposit into their VessPay wallet.
 ///
 /// Mirrors the catalog served by GET /api/wallet/currencies.
@@ -18,7 +20,7 @@ class WalletCurrencyModel {
 
   /// e.g. "$1,240.00" — symbol placement matches the code's usual convention
   String format(double amount, {int decimals = 2}) =>
-      '$symbol${amount.toStringAsFixed(decimals)}';
+      '$symbol${formatAmount(amount, decimals: decimals)}';
 
   /// e.g. "USD → GHS"
   String corridorTo(String destinationCurrency) => '$code → $destinationCurrency';

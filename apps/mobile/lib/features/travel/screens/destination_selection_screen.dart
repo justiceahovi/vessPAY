@@ -143,7 +143,7 @@ class _DestinationSelectionScreenState
                 ],
                 // Display Headline per DESIGN.md
                 Text(
-                  'Where are you travelling?',
+                  'Choose a different destination!',
                   style: GoogleFonts.inter(
                     fontWeight: FontWeight.w700,
                     fontSize: widget.isBottomSheet ? 22 : 28,
@@ -155,7 +155,7 @@ class _DestinationSelectionScreenState
 
                 // Subtitle
                 Text(
-                  'Select your destination to activate local payment rails and live exchange rates without a local SIM.',
+                  'Select your destination to activate local payment rails and live exchange rates!',
                   style: GoogleFonts.inter(
                     color: AppColors.muted,
                     fontSize: 14,
@@ -346,7 +346,7 @@ class _DestinationSelectionScreenState
           ),
           const SizedBox(width: 6),
           const Text(
-            'TRAVEL MODE SETUP',
+            'LOCAL PAYMENT RAIL SETUP',
             style: TextStyle(
               fontSize: 10.5,
               fontWeight: FontWeight.w600,
@@ -491,7 +491,7 @@ class _DestinationCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 3),
                             Text(
-                              'Instant MoMo Payouts',
+                              'Instant MoMo & Bank Payments',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
