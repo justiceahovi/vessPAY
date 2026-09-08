@@ -8,6 +8,7 @@ import 'package:vesspay/core/storage/token_storage.dart';
 import 'package:vesspay/core/theme/app_theme.dart';
 import 'package:vesspay/features/auth/screens/login_screen.dart';
 import 'package:vesspay/features/auth/screens/signup_screen.dart';
+import 'package:vesspay/features/onboarding/screens/welcome_screen.dart';
 import 'package:vesspay/features/placeholders/placeholder_screens.dart';
 import 'package:vesspay/features/splash/screens/splash_screen.dart';
 import 'support/fake_wallet_currency.dart';
@@ -46,7 +47,7 @@ void main() {
     });
 
     testWidgets(
-        'Routes to onboarding placeholder when no auth token is stored',
+        'Routes to the welcome screen when no auth token is stored',
         (WidgetTester tester) async {
       final tokenStorage = InMemoryTokenStorage(); // no token
       final router = createAppRouter(
@@ -74,16 +75,19 @@ void main() {
       await tester.pump(const Duration(milliseconds: 250));
       await tester.pumpAndSettle();
 
-      // Verify routed to Onboarding
+      // Verify routed to the welcome screen, which now fronts the signed-out
+      // flow and sends "Get started" straight to registration.
       expect(find.byType(SplashScreen), findsNothing);
-      expect(find.byType(OnboardingPlaceholderScreen), findsOneWidget);
-      expect(find.byKey(const Key('onboarding_screen')), findsOneWidget);
-      expect(find.text('Welcome to VessPay'), findsOneWidget);
-      expect(find.text('Create Account'), findsOneWidget);
-      expect(find.text('Log In'), findsOneWidget);
-      // Top right does not show Ghana since user hasn't selected destination
-      expect(find.text('Ghana Active'), findsNothing);
-      expect(find.byKey(const Key('onboarding_skip_button')), findsOneWidget);
+      expect(find.byType(WelcomeScreen), findsOneWidget);
+      expect(find.byKey(const Key('welcome_screen')), findsOneWidget);
+      expect(
+        find.text('One wallet.\nAny trip.\nPay locally.'),
+        findsOneWidget,
+      );
+      expect(find.text('Get started'), findsOneWidget);
+      expect(find.text('I already have an account'), findsOneWidget);
+      expect(find.byKey(const Key('welcome_get_started_button')), findsOneWidget);
+      expect(find.byKey(const Key('welcome_login_button')), findsOneWidget);
     });
 
     testWidgets(
@@ -131,6 +135,7 @@ void main() {
         'GoRouter placeholder routes are all registered and render properly',
         (WidgetTester tester) async {
       final routesToTest = [
+        (AppRoutes.welcome, WelcomeScreen),
         (AppRoutes.onboarding, OnboardingPlaceholderScreen),
         (AppRoutes.login, LoginScreen),
         (AppRoutes.signup, SignupScreen),

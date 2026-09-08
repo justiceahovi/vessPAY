@@ -71,7 +71,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     if (!mounted) return;
 
     if (!hasValidToken) {
-      context.go(AppRoutes.onboarding);
+      context.go(AppRoutes.welcome);
       return;
     }
 

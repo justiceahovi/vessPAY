@@ -18,6 +18,7 @@ import '../../features/pay/screens/payment_failure_screen.dart';
 import '../../features/pay/screens/transaction_list_screen.dart';
 import '../../features/pay/screens/transaction_detail_screen.dart';
 import '../../features/placeholders/placeholder_screens.dart';
+import '../../features/onboarding/screens/welcome_screen.dart';
 import '../../features/profile/screens/edit_profile_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../features/splash/screens/splash_screen.dart';
@@ -40,6 +41,11 @@ GoRouter createAppRouter({
           minDisplayDuration:
               splashMinDuration ?? const Duration(milliseconds: 1100),
         ),
+      ),
+      GoRoute(
+        path: AppRoutes.welcome,
+        name: 'welcome',
+        builder: (context, state) => const WelcomeScreen(),
       ),
       GoRoute(
         path: AppRoutes.onboarding,

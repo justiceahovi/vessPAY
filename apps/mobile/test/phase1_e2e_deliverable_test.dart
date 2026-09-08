@@ -9,6 +9,7 @@ import 'package:vesspay/core/theme/app_theme.dart';
 import 'package:vesspay/features/auth/models/user_model.dart';
 import 'package:vesspay/features/auth/repositories/auth_repository.dart';
 import 'package:vesspay/features/auth/screens/signup_screen.dart';
+import 'package:vesspay/features/onboarding/screens/welcome_screen.dart';
 import 'package:vesspay/features/placeholders/placeholder_screens.dart';
 import 'package:vesspay/features/splash/screens/splash_screen.dart';
 import 'package:vesspay/core/storage/currency_preference_storage.dart';
@@ -139,20 +140,20 @@ void main() {
       expect(find.byType(SplashScreen), findsOneWidget);
       expect(find.text('VessPay'), findsOneWidget);
 
-      // Splash minimum duration expires -> Auto-routes to Onboarding (no token)
+      // Splash minimum duration expires -> Auto-routes to Welcome (no token)
       await tester.pump(const Duration(milliseconds: 250));
       await tester.pumpAndSettle();
 
       expect(find.byType(SplashScreen), findsNothing);
-      expect(find.byType(OnboardingPlaceholderScreen), findsOneWidget);
-      expect(find.text('Welcome to VessPay'), findsOneWidget);
+      expect(find.byType(WelcomeScreen), findsOneWidget);
+      expect(find.text('Get started'), findsOneWidget);
 
       // -------------------------------------------------------------
-      // Step 2: User taps Create Account & fills registration form
+      // Step 2: Welcome goes straight to registration
       // -------------------------------------------------------------
-      final createAccountBtn = find.byKey(const Key('onboarding_signup_button'));
-      await tester.ensureVisible(createAccountBtn);
-      await tester.tap(createAccountBtn);
+      final getStartedBtn = find.byKey(const Key('welcome_get_started_button'));
+      await tester.ensureVisible(getStartedBtn);
+      await tester.tap(getStartedBtn);
       await tester.pumpAndSettle();
 
       expect(find.byType(SignupScreen), findsOneWidget);
