@@ -10,6 +10,7 @@ import '../../../core/theme/app_colors.dart';
 import '../models/deposit_account_model.dart';
 import '../providers/wallet_providers.dart';
 import '../repositories/wallet_repository.dart';
+import '../../../core/api/api_error.dart';
 
 /// Stands between the user and the deposit form until WeWire has issued them a
 /// virtual account.
@@ -92,7 +93,7 @@ class _DepositAccountGateState extends ConsumerState<DepositAccountGate> {
       if (_lastAttempt == null) _pollUntilReady();
     } catch (e) {
       if (mounted) {
-        setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+        setState(() => _error = friendlyErrorMessage(e));
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);

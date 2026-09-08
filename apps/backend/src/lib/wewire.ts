@@ -5,6 +5,28 @@ import {
   resolveInstitution,
   type PayoutChannel,
 } from './wewire-institutions';
+/**
+ * Summarise an upstream error body for use in an API message.
+ *
+ * WeWire's gateway answers an outage with an HTML error page, not JSON, so the
+ * parsed body is often a whole document. Passing that through reaches the app
+ * verbatim, so anything that is not a short plain sentence is replaced with a
+ * description of the status instead.
+ */
+function upstreamErrorMessage(data: unknown, status: number): string {
+  const raw =
+    data && typeof data === 'object'
+      ? ((data as any).error?.message ?? (data as any).message ?? JSON.stringify(data))
+      : String(data ?? '');
+  const text = String(raw).trim();
+  if (!text || /<\s*\/?\s*[a-zA-Z]/.test(text)) {
+    return status >= 500
+      ? 'the payment network is temporarily unavailable'
+      : `the payment network rejected the request (${status})`;
+  }
+  return text.length > 200 ? `${text.slice(0, 200)}...` : text;
+}
+
 export {
   getWeWireInstitutions,
   resolveInstitution,
@@ -320,12 +342,7 @@ export async function submitSimplifiedKyc(
     } catch {
       data = text;
     }
-    const errMsg =
-      typeof data === 'object' && data?.error?.message
-        ? data.error.message
-        : typeof data === 'object' && data?.message
-        ? data.message
-        : text;
+    const errMsg = upstreamErrorMessage(data, res.status);
     throw new Error(`Simplified KYC submission failed: ${errMsg} (Status: ${res.status})`);
   }
 
@@ -920,12 +937,7 @@ export async function createWeWireBeneficiary(
   }
 
   if (!res.ok) {
-    const errMsg =
-      typeof data === 'object' && data?.error?.message
-        ? data.error.message
-        : typeof data === 'object' && data?.message
-        ? data.message
-        : JSON.stringify(data);
+    const errMsg = upstreamErrorMessage(data, res.status);
     throw new Error(`Failed to create WeWire beneficiary: ${errMsg} (Status: ${res.status})`);
   }
 

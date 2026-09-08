@@ -9,6 +9,7 @@ import '../models/wallet_balance_model.dart';
 import '../repositories/wallet_repository.dart';
 import '../../travel/providers/travel_providers.dart';
 import 'currency_providers.dart';
+import '../../../core/api/api_error.dart';
 
 /// Fallback used only until the live rate resolves. Per corridor, because a
 /// single number cannot stand in for both a ~15 GHS and a ~1150 NGN rate --
@@ -251,7 +252,7 @@ class TopupNotifier extends StateNotifier<TopupState> {
     } catch (e) {
       state = state.copyWith(
         step: TopupStep.failed,
-        errorMessage: e.toString(),
+        errorMessage: friendlyErrorMessage(e),
         isPolling: false,
       );
       return null;

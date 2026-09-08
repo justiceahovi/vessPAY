@@ -5,6 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../models/kyc_model.dart';
 import '../providers/kyc_providers.dart';
 import '../repositories/kyc_repository.dart';
+import '../../../core/api/api_error.dart';
 
 class KycScreen extends ConsumerStatefulWidget {
   const KycScreen({super.key});
@@ -44,7 +45,7 @@ class _KycScreenState extends ConsumerState<KycScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString().replaceFirst('Exception: ', '');
+          _errorMessage = friendlyErrorMessage(e);
         });
       }
     } finally {
@@ -82,7 +83,7 @@ class _KycScreenState extends ConsumerState<KycScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString().replaceFirst('Exception: ', '');
+          _errorMessage = friendlyErrorMessage(e);
         });
       }
     } finally {

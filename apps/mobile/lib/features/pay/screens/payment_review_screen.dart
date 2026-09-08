@@ -13,6 +13,7 @@ import '../models/payment_quote_model.dart';
 import '../models/transaction_model.dart';
 import '../providers/pay_anyone_providers.dart';
 import '../repositories/payment_repository.dart';
+import '../../../core/api/api_error.dart';
 
 class PaymentReviewScreen extends ConsumerStatefulWidget {
   final PayFlowData? dataOverride;
@@ -702,7 +703,7 @@ class _PaymentReviewScreenState extends ConsumerState<PaymentReviewScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Payment could not be started: ${e.toString().replaceAll('Exception: ', '')}',
+            'Payment could not be started. ${friendlyErrorMessage(e)}',
           ),
           backgroundColor: AppColors.error,
         ),

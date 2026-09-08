@@ -104,6 +104,57 @@ class ApiException implements Exception {
     }
   }
 
+  /// True when the failure is an upstream outage rather than anything the
+  /// user did — a gateway error from us, or a provider failure the backend
+  /// wrapped and passed through.
+  bool get isUpstreamUnavailable {
+    if (statusCode == 502 || statusCode == 503 || statusCode == 504) return true;
+    final m = message.toLowerCase();
+    return m.contains('service temporarily unavailable') ||
+        m.contains('bad gateway') ||
+        m.contains('gateway timeout') ||
+        m.contains('(status: 502)') ||
+        m.contains('(status: 503)') ||
+        m.contains('(status: 504)');
+  }
+
+  /// Copy that is safe to put in front of a user.
+  ///
+  /// Provider failures reach us with the provider's own wording, and when
+  /// their gateway is down that wording is an entire HTML error page. Nothing
+  /// off the wire is rendered verbatim: anything that looks like markup, is
+  /// empty, or is too long to be a sentence becomes a generic message.
+  String get userMessage {
+    if (isUpstreamUnavailable) {
+      return 'The payment network is temporarily unavailable. '
+          'Please try again in a moment.';
+    }
+    final clean = message.trim();
+    if (clean.isEmpty || _looksLikeMarkup(clean) || clean.length > 160) {
+      return 'Something went wrong. Please try again.';
+    }
+    return clean;
+  }
+
+  static bool _looksLikeMarkup(String value) =>
+      RegExp(r'<\s*/?\s*[a-zA-Z]').hasMatch(value);
+
   @override
   String toString() => 'ApiException(code: $code, statusCode: $statusCode, message: $message)';
+}
+
+/// User-facing copy for any thrown object, so no screen has to render
+/// `toString()` and risk leaking an exception wrapper or a provider's HTML.
+String friendlyErrorMessage(Object error) {
+  if (error is ApiException) return error.userMessage;
+  final clean = error
+      .toString()
+      .replaceFirst('Exception: ', '')
+      .trim();
+  if (clean.isEmpty ||
+      clean.length > 160 ||
+      RegExp(r'<\s*/?\s*[a-zA-Z]').hasMatch(clean)) {
+    return 'Something went wrong. Please try again.';
+  }
+  return clean;
 }
