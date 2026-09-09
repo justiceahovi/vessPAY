@@ -105,7 +105,7 @@ class WelcomeScreen extends StatelessWidget {
 
   Widget _buildHeadline() {
     return Text(
-      'One wallet.\nAny trip.\nPay locally.',
+      'One wallet.\nLocal Everywhere!',
       style: GoogleFonts.schibstedGrotesk(
         fontSize: 40,
         fontWeight: FontWeight.w600,
@@ -123,8 +123,8 @@ class WelcomeScreen extends StatelessWidget {
       // the button beneath it.
       constraints: const BoxConstraints(maxWidth: 300),
       child: Text(
-        'Spend like a local from the money you already have. '
-        'No local SIM, no local bank account.',
+        'Your money travels acrros Africa.'
+        'We connect it to local payment rails wherever you go!',
         style: GoogleFonts.schibstedGrotesk(
           fontSize: 15,
           fontWeight: FontWeight.w400,

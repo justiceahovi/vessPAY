@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VessPay — Demo</title>
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/png" href="favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -23,7 +24,8 @@
       --success: #05B169;
     }
 
-    html, body {
+    html,
+    body {
       height: 100%;
       margin: 0;
       background: var(--dark);
@@ -33,12 +35,14 @@
       line-height: 1.7;
       -webkit-font-smoothing: antialiased;
     }
+
     body {
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 60px;
     }
+
     /* Soft brand glow behind the device. */
     body::before {
       content: '';
@@ -48,10 +52,22 @@
       pointer-events: none;
     }
 
-    .col { flex: none; position: relative; }
-    .col.left { width: 340px; }
-    .col.right { width: 330px; }
-    .col p { margin: 0 0 14px; }
+    .col {
+      flex: none;
+      position: relative;
+    }
+
+    .col.left {
+      width: 340px;
+    }
+
+    .col.right {
+      width: 330px;
+    }
+
+    .col p {
+      margin: 0 0 14px;
+    }
 
     /* ---- wordmark ---- */
     .brand {
@@ -60,8 +76,10 @@
       gap: 11px;
       margin-bottom: 26px;
     }
+
     .mark {
-      width: 34px; height: 34px;
+      width: 34px;
+      height: 34px;
       border-radius: 9px;
       background: var(--elevated);
       border: 1px solid var(--hairline);
@@ -72,8 +90,18 @@
       align-content: center;
       justify-content: center;
     }
-    .mark i { background: var(--primary); border-radius: 1px; display: block; }
-    .mark i:nth-child(2), .mark i:nth-child(6) { opacity: .45; }
+
+    .mark i {
+      background: var(--primary);
+      border-radius: 1px;
+      display: block;
+    }
+
+    .mark i:nth-child(2),
+    .mark i:nth-child(6) {
+      opacity: .45;
+    }
+
     .brand span {
       color: var(--on-dark);
       font-size: 17px;
@@ -113,9 +141,19 @@
       margin-top: 8px;
       line-height: 1;
     }
-    .corridor b { color: var(--on-dark); font-weight: 600; }
-    .corridor .arrow { color: var(--primary-soft); }
-    .corridor .sep { color: var(--hairline); }
+
+    .corridor b {
+      color: var(--on-dark);
+      font-weight: 600;
+    }
+
+    .corridor .arrow {
+      color: var(--primary-soft);
+    }
+
+    .corridor .sep {
+      color: var(--hairline);
+    }
 
     /* ---- eyebrow ---- */
     .label {
@@ -129,6 +167,7 @@
       text-transform: uppercase;
       margin: 0 0 20px;
     }
+
     .label::after {
       content: '';
       flex: 1;
@@ -137,7 +176,13 @@
     }
 
     /* ---- numbered steps ---- */
-    .steps { margin: 0 0 26px; padding: 0; list-style: none; counter-reset: s; }
+    .steps {
+      margin: 0 0 26px;
+      padding: 0;
+      list-style: none;
+      counter-reset: s;
+    }
+
     .steps li {
       counter-increment: s;
       position: relative;
@@ -146,12 +191,18 @@
       font-size: 14.5px;
       line-height: 1.6;
     }
-    .steps li:last-child { margin-bottom: 0; }
+
+    .steps li:last-child {
+      margin-bottom: 0;
+    }
+
     .steps li::before {
       content: counter(s);
       position: absolute;
-      left: 0; top: 2px;
-      width: 24px; height: 24px;
+      left: 0;
+      top: 2px;
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
       background: rgba(0, 82, 255, .13);
       border: 1px solid rgba(0, 82, 255, .32);
@@ -163,7 +214,11 @@
       justify-content: center;
       line-height: 1;
     }
-    .steps b { color: var(--on-dark); font-weight: 600; }
+
+    .steps b {
+      color: var(--on-dark);
+      font-weight: 600;
+    }
 
     /* ---- both-currencies card (UX principle 2, made literal) ---- */
     .rate {
@@ -173,6 +228,7 @@
       padding: 2px 18px;
       margin-bottom: 22px;
     }
+
     .rate .row {
       display: flex;
       align-items: baseline;
@@ -180,14 +236,21 @@
       padding: 14px 0;
       font-size: 14px;
     }
-    .rate .row + .row { border-top: 1px solid var(--hairline); }
+
+    .rate .row+.row {
+      border-top: 1px solid var(--hairline);
+    }
+
     .rate .v {
       font-size: 17px;
       font-weight: 600;
       letter-spacing: -0.01em;
       color: var(--on-dark);
     }
-    .rate .v.out { color: var(--primary-soft); }
+
+    .rate .v.out {
+      color: var(--primary-soft);
+    }
 
     /* ---- live badge ---- */
     .live {
@@ -200,13 +263,21 @@
       margin-bottom: 10px;
       line-height: 1;
     }
+
     .live .dot {
-      width: 7px; height: 7px;
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
       background: var(--success);
       box-shadow: 0 0 0 3px rgba(5, 177, 105, .18);
     }
-    .foot { font-size: 12.5px; line-height: 1.65; color: var(--muted-dim); margin: 0; }
+
+    .foot {
+      font-size: 12.5px;
+      line-height: 1.65;
+      color: var(--muted-dim);
+      margin: 0;
+    }
 
     /* ---- device ---- */
     .phone {
@@ -219,6 +290,7 @@
       flex: none;
       position: relative;
     }
+
     iframe {
       width: 100%;
       height: 100%;
@@ -230,22 +302,42 @@
 
     /* The right-hand column only appears when there is genuinely room for
        three columns; below that the left column carries the pitch alone. */
-    .col.right { display: none; }
+    .col.right {
+      display: none;
+    }
+
     @media (min-width: 1400px) {
-      .col.right { display: block; }
+      .col.right {
+        display: block;
+      }
     }
 
     /* Roomier phone on large displays. Gated on height too, so the frame
        never outgrows the window and starts clipping. */
     @media (min-width: 1100px) and (min-height: 900px) {
-      .phone { width: 430px; height: 860px; }
+      .phone {
+        width: 430px;
+        height: 860px;
+      }
     }
 
     /* On real phones, drop the frame and let the app fill the screen. */
     @media (max-width: 900px) {
-      html, body { display: block; background: #fff; }
-      body::before { display: none; }
-      .col { display: none; }
+
+      html,
+      body {
+        display: block;
+        background: #fff;
+      }
+
+      body::before {
+        display: none;
+      }
+
+      .col {
+        display: none;
+      }
+
       .phone {
         width: 100%;
         height: 100%;
@@ -254,10 +346,14 @@
         box-shadow: none;
         background: #fff;
       }
-      iframe { border-radius: 0; }
+
+      iframe {
+        border-radius: 0;
+      }
     }
   </style>
 </head>
+
 <body>
   <div class="col left">
     <div class="brand">
@@ -265,15 +361,21 @@
       <span>vessPAY</span>
     </div>
 
-    <h1>One wallet. Any trip. Pay locally.</h1>
+    <h1>One wallet.</h1>
+    <h1>Local Everywhere!</h1>
 
-    <p>Millions of visitors and diaspora travellers arrive in Africa with international cards and bank accounts, but everyday payments often depend on local mobile-money ecosystems.</p>
+    <p><i>Your money travels acrros Africa. We connect it to local payment rails wherever you go!</i></p>
+
+    <p>Millions of visitors and diaspora travellers arrive in Africa with international cards and bank accounts, but
+      everyday payments often depend on local mobile-money ecosystems.</p>
     <p class="bridge">VessPay bridges that gap.</p>
-    <p>You load your wallet using the money you already have, and vessPAY lets you pay local mobile-money users in their local currency without requiring you to buy a local SIM.</p>
+    <p>You load your wallet using the money you already have, and vessPAY lets you pay local mobile-money users in
+      their
+      local currency without requiring you to buy a local SIM.</p>
 
     <div class="corridor">
-      <b>USD/GBP/EUR</b> <span class="arrow">&rarr;</span> <b>GH&#8373;</b>
-      <span class="sep">&#124;</span> Mobile Money
+      <b>USD/GBP/EUR</b> <span class="arrow">&rarr;</span> <b>GH&#8373;</b> / <b>NGN</b>
+      <span class="sep">&#124;</span> MoMo / Bank
     </div>
   </div>
 
@@ -287,7 +389,7 @@
     <ol class="steps">
       <li><b>Fund a wallet in USD/GBP/EUR.</b> Bank transfer or crypto, settled into the wallet.</li>
       <li><b>Enter any MoMo number.</b> No local SIM and no MoMo registration required.</li>
-      <li><b>vessPAY pays out.</b> Straight to MTN, Telecel or a Ghanaian bank.</li>
+      <li><b>vessPAY pays out.</b> Straight to MTN, Telecel or any bank.</li>
     </ol>
 
     <div class="rate">
@@ -296,7 +398,8 @@
     </div>
 
     <div class="live"><span class="dot"></span> Live against the WeWire sandbox</div>
-    <p class="foot">Both sides of every payment are shown before it moves. No real funds move in this environment.</p>
+    <p class="foot">Both sides of every payment are shown before it moves.</p>
   </div>
 </body>
+
 </html>
